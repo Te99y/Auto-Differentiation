@@ -9,21 +9,22 @@ if __name__ == '__main__':
     print(a.shape[-1])
     print()
 
-    b = ad.array([2, 1])
+    b = ad.array([2, 1], outer_shape=[2, 3])
     print(b.value)
     print(b.shape)
     print(b.shape[-1])
     print()
 
-    shape1 = list(a.shape)
-    shape2 = list(b.shape)
+    shape1 = a.shape
+    shape2 = b.shape
+
+    # shape1 = list(a.shape)
+    # shape2 = list(b.shape)
     print(shape1)
     print(shape2)
+    print(len(shape1))
+    print(len(shape2))
     print()
 
-    x = np.zeros(shape=(2, 1, 3))
-    y = np.ones(shape=(2, 3))
-    z = x - y
-    print(np.shape(x))
-    print(np.shape(y))
-    print(np.shape(z))
+    print(a.broadcast_with(b)
+

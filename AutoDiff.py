@@ -68,19 +68,32 @@ class array:
 
     def broadcast_with(self, other: Number | ListAlike):
         """
-        Each dim of the 2 array must be either 1 or equivalent to be broadcastable
-        :param other: Number or list like structure of numbers
-        :return: True or False
+        Try to broadcast between 2 arrays. If each dim are equivalent or =1 then they can broadcast
+        :param other: The other number or list-like numbers
+        :return: If broadcastable : The shape of the simplest broadcast shape
+                 Otherwise : None
         """
-        other_shape = array(other)
-        my_shape = self.shape
-        [other_shape[i] == my_shape[i] or other_shape[i] == 1 or my_shape[i] == 1 for i in]
+        shape1 = self.shape
+        shape2 = array(other).shape
+        if len(shape2) > len(shape1):
+            temp = shape1
+            shape1 = shape2
+            shape2 = temp
+        residual = len(shape1)-len(shape2)
+        result = () + shape1[:residual]
 
-    def __add__(self, other):
-        if not isinstance(other, array):
-            raise TypeError('\'+\' for an array expects both operands to be arrays')
-        # if self.shape[-1] != other.shape[-1] and :
-        #     raise ValueError('')
+        for d1, d2 in zip(shape1[residual:], shape2):
+            if d1 == d2 or d2 == 1:
+                result += (d1, )
+            elif d1 == 1:
+                result += (d2, )
+            else:
+                raise TypeError(f'Cannot broadcast between {shape1} and {shape2}, miss matched at {d1} and {d2}')
+        return result
+
+    def __add__(self, other: Number | ListAlike):
+        other_arr = array(other)
+        broadcast_shape = self.broadcast_with(other_arr)
 
 
 class tensor:
