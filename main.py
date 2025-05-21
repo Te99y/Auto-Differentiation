@@ -1,8 +1,6 @@
 import AutoDiff as ad
 
-
 if __name__ == '__main__':
-
     a = ad.array(2)
     print(a.value)
     print(a.shape)

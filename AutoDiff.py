@@ -1,8 +1,7 @@
 from __future__ import annotations
-from typing import Union
-import math
 
-# import numpy as np
+import math
+from typing import Union
 
 TENSOR_MAP = []
 Number = Union[int | float]
@@ -70,7 +69,7 @@ class array:
 
     def broadcastable(self, other: Number | ListAlike):
         other_arr = array(other)
-        return True/False
+        return self.shape
 
     def __add__(self, other):
         if not isinstance(other, array):
