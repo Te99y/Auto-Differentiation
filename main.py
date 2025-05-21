@@ -26,5 +26,5 @@ if __name__ == '__main__':
     print(len(shape2))
     print()
 
-    print(a.broadcast_with(b)
+    print(a.broadcast_with(b))
 
