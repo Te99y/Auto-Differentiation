@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import math
 from typing import Union
 
@@ -67,9 +66,15 @@ class array:
         self.shape = shape
         return shape
 
-    def broadcastable(self, other: Number | ListAlike):
-        other_arr = array(other)
-        return self.shape
+    def broadcast_with(self, other: Number | ListAlike):
+        """
+        Each dim of the 2 array must be either 1 or equivalent to be broadcastable
+        :param other: Number or list like structure of numbers
+        :return: True or False
+        """
+        other_shape = array(other)
+        my_shape = self.shape
+        [other_shape[i] == my_shape[i] or other_shape[i] == 1 or my_shape[i] == 1 for i in]
 
     def __add__(self, other):
         if not isinstance(other, array):
