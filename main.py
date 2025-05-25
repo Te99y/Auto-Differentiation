@@ -3,28 +3,34 @@ import numpy as np
 
 if __name__ == '__main__':
 
-    a = ad.array([[3, 2], [3, 2]], outer_shape=(2,))
-    print(a.value)
-    print(a.shape)
-    print(a.shape[-1])
+    a = ad.array([[3, 2, 1], [10, 20, 30]], outer_shape=(3, 1,))
+    print(f'a.value : {a.value}')
+    print(f'a.shape : {a.shape}')
     print()
 
-    b = ad.array([2, 1], outer_shape=[2, 3])
-    print(b.value)
-    print(b.shape)
-    print(b.shape[-1])
+    b = ad.array([3], outer_shape=[2, 3, 3, 1])
+    print(f'b.value : {b.value}')
+    print(f'b.shape : {b.shape}')
     print()
 
-    shape1 = a.shape
-    shape2 = b.shape
+    c = a.broadcast_with(b)
+    print(f'broadcast shape : {c}')
+    print(f'padded  a.shape : {(1, )*(len(c) - len(a.shape)) + a.shape}')
+    print(f'padded  b.shape : {tuple([1]*(len(c) - len(b.shape))) + b.shape}')
+    print(f'testing : ')
+    print(a+b)
 
-    # shape1 = list(a.shape)
-    # shape2 = list(b.shape)
-    print(shape1)
-    print(shape2)
-    print(len(shape1))
-    print(len(shape2))
-    print()
+    # a = np.array(a.value)
+    # b = np.array(b.value)
+    # # print(a+b)
+    # c = [0, 1, 2, 3]
+    # d = [c]*3
+    # d = c
+    # print(d)
+    # d = [[d]*2]
+    # d[0] = 1
+    # print(c)
+    # print(d)
 
-    print(a.broadcast_with(b))
+
 

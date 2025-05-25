@@ -1,6 +1,8 @@
 from __future__ import annotations
 import math
+import operator
 from typing import Union
+from copy import deepcopy
 
 TENSOR_MAP = []
 Number = Union[int | float]
@@ -15,13 +17,13 @@ class array:
 
         elif isinstance(init_value, array):
             self.shape = tuple(outer_shape) + init_value.shape
-            self.value = init_value.value
+            self.value = deepcopy(init_value.value)
             if outer_shape:
                 for s in reversed(outer_shape):
                     self.value = [self.value]*s
 
         elif isinstance(init_value, list):
-            queue = init_value.copy()
+            queue = init_value
             while isinstance(queue[0], list):
                 if not all(isinstance(q, list) and len(q) == len(queue[0]) for q in queue):
                     raise ValueError('Legal lists must be homogeneous')
@@ -30,7 +32,7 @@ class array:
             if not all(isinstance(v, Number) for v in queue):
                 raise TypeError('Only numbers or lists are allowed in a legal list')
 
-            self.value = init_value
+            self.value = deepcopy(init_value)
             if outer_shape:
                 for s in reversed(outer_shape):
                     self.value = [self.value]*s
@@ -91,9 +93,74 @@ class array:
                 raise TypeError(f'Cannot broadcast between {shape1} and {shape2}, miss matched at {d1} and {d2}')
         return result
 
+    def elementwise(self, op, other: array = None):
+        """
+        Performs elementwise operation on 1 or 2 lists
+        :param op: [+, -, *, /, -(neg), abs]
+        :param other: Another list
+        :return: The result as a list
+        """
+        if not other:
+            return self._elementwise_unary(op)
+
+        v1 = self.value
+        v2 = other.value
+        broadcast_shape = self.broadcast_with(other)
+        padded_shape1 = (1, )*(len(broadcast_shape) - len(self.shape)) + self.shape
+        padded_shape2 = (1, )*(len(broadcast_shape) - len(other.shape)) + other.shape
+        indexes = [0]*(len(broadcast_shape) - 1)
+        fuse = 1
+        res = []
+        for d in broadcast_shape[:-1]:  # ex: shape=[2, 3, 4, 5], i=[2, 1, 0]
+            fuse *= d
+            res = [res]*d
+        cnt = 0
+        for _ in range(len(broadcast_shape) - len(self.shape)):
+            v1 = [v1]
+        for _ in range(len(broadcast_shape) - len(other.shape)):
+            v2 = [v2]
+        print(res)
+        while cnt < fuse:
+            pointer1 = v1
+            pointer2 = v2
+            for i in indexes:
+                pointer1 = pointer1[min(i, len(pointer1)-1)]
+                pointer2 = pointer2[min(i, len(pointer2)-1)]
+            indexes[-1] += 1
+            # carry the digits
+            for i in reversed(range(len(indexes))):
+                if i > 0 and indexes[i] >= broadcast_shape[i]:
+                    indexes[i] = 0
+                    indexes[i-1] += 1
+            cnt += 1
+            # print(indexes)
+
+        # for i, d in enumerate(broadcast_shape[:-1]):
+        #     d1 = padded_shape1[i]
+        #     d2 = padded_shape2[i]
+
+        return res
+
+    def _elementwise_unary(self, op):
+        """
+        Performs elementwise operation on a list
+        :param op: +, -, *, /
+        :param other: Another list
+        :return: The result as a list
+        """
+        def _elementwise(_x1, _op: operator, _v2):
+            if isinstance(_x1, list):
+                return [_elementwise(_x1, ) ]
+        result = []
+        cur1 = self.value
+        while isinstance(cur1[0], list):
+            cur1 = 0
+        return 0
+
+
     def __add__(self, other: Number | ListAlike):
         other_arr = array(other)
-        broadcast_shape = self.broadcast_with(other_arr)
+        return self.elementwise(operator.add, other_arr)
 
 
 class tensor:
