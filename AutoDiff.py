@@ -77,7 +77,7 @@ class array:
                  Otherwise : None
         """
         shape1 = self.shape
-        shape2 = array(other).shape
+        shape2 = other.shape if isinstance(other, array) else array(other).shape
         if len(shape2) > len(shape1):
             temp = shape1
             shape1 = shape2
@@ -113,15 +113,19 @@ class array:
             v2 = [v2]
         padded_shape1 = (1,) * (len(broadcast_shape) - len(self.shape)) + self.shape
         padded_shape2 = (1,) * (len(broadcast_shape) - len(other.shape)) + other.shape
-        broadcast_index = list(map(lambda s: s - 1, broadcast_shape))[:-1]
-        padded_index1 = list(map(lambda s: s - 1, padded_shape1))
-        padded_index2 = list(map(lambda s: s - 1, padded_shape2))
+
+        broadcast_index = [s-1 for s in broadcast_shape][:-1]
+        padded_index1 = [s-1 for s in padded_shape1][:-1]
+        padded_index2 = [s-1 for s in padded_shape2][:-1]
         indexes = [0] * (len(broadcast_index))
         fuse = 1
         res = []
-        for d in broadcast_shape[:-1]:  # ex: shape=[2, 3, 4, 5], i=[2, 1, 0]
+        for d in reversed(broadcast_shape[:-1]):  # ex: shape=[2, 3, 4, 5], i=[2, 1, 0]
             fuse *= d
-            res = [deepcopy(res) for _ in range(d)]  # prep the shell for most inner layer
+            temp = res
+            res = [deepcopy(temp) for _ in range(d)]  # prep the shell for most inner layer
+
+        print(res)
 
         cnt = 0
         while cnt < fuse:
@@ -136,6 +140,9 @@ class array:
             p.extend([op(a, pointer2[0]) for a in pointer1] if len(pointer2) == 1
                      else [op(pointer1[0], b) for b in pointer2])
 
+            # If input is number, index[-1] will raise outOfBound
+            if cnt+1 >= fuse:
+                break
             # Move to next index, check carry of each digit
             indexes[-1] += 1
             for i in reversed(range(len(indexes))):
@@ -150,13 +157,6 @@ class array:
         return res_arr
 
     def _elementwise_unary(self, op):
-        """
-        Performs elementwise operation on a list
-        :param op: +, -, *, /
-        :param other: Another list
-        :return: The result as a list
-        """
-
         def _elementwise(_x1, _op: operator, _v2):
             if isinstance(_x1, list):
                 return [_elementwise(_x1, )]
@@ -170,6 +170,18 @@ class array:
     def __add__(self, other: Number | ListAlike):
         other_arr = array(other)
         return self.elementwise(operator.add, other_arr)
+
+    def __sub__(self, other: Number | ListAlike):
+        other_arr = array(other)
+        return self.elementwise(operator.sub, other_arr)
+
+    def __mul__(self, other: Number | ListAlike):
+        other_arr = array(other)
+        return self.elementwise(operator.mul, other_arr)
+
+    def __truediv__(self, other: Number | ListAlike):
+        other_arr = array(other)
+        return self.elementwise(operator.truediv, other_arr)
 
 
 class tensor:

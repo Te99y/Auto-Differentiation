@@ -10,17 +10,20 @@ if __name__ == '__main__':
     print()
 
     b = ad.array([3], outer_shape=[2, 3, 3, 1])
+    b = ad.array(3)
     print(f'b.value : {b.value}')
     print(f'b.shape : {b.shape}')
     print()
 
-    c = a + b
+    c = a * b
     print(f'testing : ')
     print(c.value)
 
-    a = np.array(a.value)
-    b = np.array(b.value)
-    print(c.value == (a+b))
+    aNP = np.array(a.value)
+    bNP = np.array(b.value)
+    cNP = aNP * bNP
+    print(list(cNP.flatten()) == c.flatten())
+    # print(c == cNP.flatten())
     # c = [0, 1, 2, 3]
     # d = [c]*3
     # d = c
