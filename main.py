@@ -9,21 +9,18 @@ if __name__ == '__main__':
     print(f'a.shape : {a.shape}')
     print()
 
-    # b = ad.array([3], outer_shape=[2, 3, 3, 1])
-    # print(f'b.value : {b.value}')
-    # print(f'b.shape : {b.shape}')
-    # print()
-    #
-    # c = a.broadcast_with(b)
-    # print(f'broadcast shape : {c}')
-    # print(f'padded  a.shape : {(1, )*(len(c) - len(a.shape)) + a.shape}')
-    # print(f'padded  b.shape : {tuple([1]*(len(c) - len(b.shape))) + b.shape}')
-    # print(f'testing : ')
-    # print(a+b)
+    b = ad.array([3], outer_shape=[2, 3, 3, 1])
+    print(f'b.value : {b.value}')
+    print(f'b.shape : {b.shape}')
+    print()
 
-    # a = np.array(a.value)
-    # b = np.array(b.value)
-    # # print(a+b)
+    c = a + b
+    print(f'testing : ')
+    print(c.value)
+
+    a = np.array(a.value)
+    b = np.array(b.value)
+    print(c.value == (a+b))
     # c = [0, 1, 2, 3]
     # d = [c]*3
     # d = c

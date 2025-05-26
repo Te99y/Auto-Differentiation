@@ -20,7 +20,7 @@ class array:
             self.value = deepcopy(init_value.value)
             if outer_shape:
                 for s in reversed(outer_shape):
-                     self.value = [deepcopy(self.value) for _ in range(s)]
+                    self.value = [deepcopy(self.value) for _ in range(s)]
 
         elif isinstance(init_value, list):
             queue = init_value
@@ -43,9 +43,9 @@ class array:
                 self.shape = tuple(outer_shape)
                 self.value = init_value
                 for s in reversed(outer_shape):
-                     self.value = [deepcopy(self.value) for _ in range(s)]
+                    self.value = [deepcopy(self.value) for _ in range(s)]
             else:
-                self.shape = (1, )
+                self.shape = (1,)
                 self.value = [init_value]
 
     def flatten(self):
@@ -56,6 +56,7 @@ class array:
                 [_flatten(l) for l in lst]
             else:
                 _flatten_list.extend(lst)
+
         _flatten(self.value)
         return _flatten_list
 
@@ -63,7 +64,7 @@ class array:
         arr = self.value
         shape = ()
         while isinstance(arr, list):
-            shape += (len(arr), )
+            shape += (len(arr),)
             arr = arr[0]
         self.shape = shape
         return shape
@@ -81,14 +82,14 @@ class array:
             temp = shape1
             shape1 = shape2
             shape2 = temp
-        residual = len(shape1)-len(shape2)
+        residual = len(shape1) - len(shape2)
         result = () + shape1[:residual]
 
         for d1, d2 in zip(shape1[residual:], shape2):
             if d1 == d2 or d2 == 1:
-                result += (d1, )
+                result += (d1,)
             elif d1 == 1:
-                result += (d2, )
+                result += (d2,)
             else:
                 raise TypeError(f'Cannot broadcast between {shape1} and {shape2}, miss matched at {d1} and {d2}')
         return result
@@ -103,45 +104,50 @@ class array:
         if not other:
             return self._elementwise_unary(op)
 
+        broadcast_shape = self.broadcast_with(other)
         v1 = self.value
         v2 = other.value
-        broadcast_shape = self.broadcast_with(other)
-        padded_shape1 = (1, )*(len(broadcast_shape) - len(self.shape)) + self.shape
-        padded_shape2 = (1, )*(len(broadcast_shape) - len(other.shape)) + other.shape
-        indexes = [0]*(len(broadcast_shape) - 1)
-        fuse = 1
-        res = []
-        for d in broadcast_shape[:-1]:  # ex: shape=[2, 3, 4, 5], i=[2, 1, 0]
-            fuse *= d
-            res = [deepcopy(res) for _ in range(d)]
-        cnt = 0
         for _ in range(len(broadcast_shape) - len(self.shape)):
             v1 = [v1]
         for _ in range(len(broadcast_shape) - len(other.shape)):
             v2 = [v2]
-        print(res)
+        padded_shape1 = (1,) * (len(broadcast_shape) - len(self.shape)) + self.shape
+        padded_shape2 = (1,) * (len(broadcast_shape) - len(other.shape)) + other.shape
+        broadcast_index = list(map(lambda s: s - 1, broadcast_shape))[:-1]
+        padded_index1 = list(map(lambda s: s - 1, padded_shape1))
+        padded_index2 = list(map(lambda s: s - 1, padded_shape2))
+        indexes = [0] * (len(broadcast_index))
+        fuse = 1
+        res = []
+        for d in broadcast_shape[:-1]:  # ex: shape=[2, 3, 4, 5], i=[2, 1, 0]
+            fuse *= d
+            res = [deepcopy(res) for _ in range(d)]  # prep the shell for most inner layer
+
+        cnt = 0
         while cnt < fuse:
             pointer1 = v1
             pointer2 = v2
+            for i, i1, i2 in zip(indexes, padded_index1, padded_index2):
+                pointer1 = pointer1[min(i, i1)]
+                pointer2 = pointer2[min(i, i2)]
+            p = res
             for i in indexes:
-                pointer1 = pointer1[min(i, len(pointer1)-1)]
-                pointer2 = pointer2[min(i, len(pointer2)-1)]
+                p = p[i]
+            p.extend([op(a, pointer2[0]) for a in pointer1] if len(pointer2) == 1
+                     else [op(pointer1[0], b) for b in pointer2])
+
+            # Move to next index, check carry of each digit
             indexes[-1] += 1
-            print(f'p1 : {pointer1}')
-            print(f'p2 : {pointer2}')
-            # carry the digits
             for i in reversed(range(len(indexes))):
-                if i > 0 and indexes[i] >= broadcast_shape[i]:
+                if i > 0 and indexes[i] > broadcast_index[i]:
                     indexes[i] = 0
-                    indexes[i-1] += 1
+                    indexes[i - 1] += 1
             cnt += 1
-            # print(indexes)
 
-        # for i, d in enumerate(broadcast_shape[:-1]):
-        #     d1 = padded_shape1[i]
-        #     d2 = padded_shape2[i]
-
-        return res
+        res_arr = array(0)
+        res_arr.value = res
+        res_arr.shape = broadcast_shape
+        return res_arr
 
     def _elementwise_unary(self, op):
         """
@@ -150,15 +156,16 @@ class array:
         :param other: Another list
         :return: The result as a list
         """
+
         def _elementwise(_x1, _op: operator, _v2):
             if isinstance(_x1, list):
-                return [_elementwise(_x1, ) ]
+                return [_elementwise(_x1, )]
+
         result = []
         cur1 = self.value
         while isinstance(cur1[0], list):
             cur1 = 0
         return 0
-
 
     def __add__(self, other: Number | ListAlike):
         other_arr = array(other)
@@ -291,4 +298,3 @@ def exp(v: tensor | Number):
 
 for t in TENSOR_MAP:
     print(t.__str__())
-
