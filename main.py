@@ -15,23 +15,14 @@ if __name__ == '__main__':
     print(f'b.shape : {b.shape}')
     print()
 
-    c = a * b
+    c = -b + a
     print(f'testing : ')
     print(c.value)
 
-    aNP = np.array(a.value)
-    bNP = np.array(b.value)
-    cNP = aNP * bNP
-    print(list(cNP.flatten()) == c.flatten())
-    # print(c == cNP.flatten())
-    # c = [0, 1, 2, 3]
-    # d = [c]*3
-    # d = c
-    # print(d)
-    # d = [[d]*2]
-    # d[0] = 1
-    # print(c)
-    # print(d)
+    # aNP = np.array(a.value)
+    # bNP = np.array(b.value)
+    # cNP = aNP * bNP
+    # print(list(cNP.flatten()) == c.flatten())
 
 
 

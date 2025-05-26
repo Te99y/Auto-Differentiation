@@ -157,15 +157,19 @@ class array:
         return res_arr
 
     def _elementwise_unary(self, op):
-        def _elementwise(_x1, _op: operator, _v2):
-            if isinstance(_x1, list):
-                return [_elementwise(_x1, )]
-
-        result = []
-        cur1 = self.value
-        while isinstance(cur1[0], list):
-            cur1 = 0
-        return 0
+        res_arr = array(0)
+        res_arr.shape = self.shape
+        res_arr.value = deepcopy(self.value)
+        pointer = [res_arr.value]
+        for _ in res_arr.shape[:-1]:
+            new_pointer = []
+            for sub in pointer:
+                new_pointer += sub
+            pointer = new_pointer
+        for i in range(len(pointer)):
+            for j in range(len(pointer[i])):
+                pointer[i][j] = op(pointer[i][j])
+        return res_arr
 
     def __add__(self, other: Number | ListAlike):
         other_arr = array(other)
@@ -182,6 +186,12 @@ class array:
     def __truediv__(self, other: Number | ListAlike):
         other_arr = array(other)
         return self.elementwise(operator.truediv, other_arr)
+
+    def __neg__(self):
+        return self.elementwise(operator.neg)
+
+    def __abs__(self):
+        return self.elementwise(operator.abs)
 
 
 class tensor:
