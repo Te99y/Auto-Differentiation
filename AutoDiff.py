@@ -20,7 +20,7 @@ class array:
             self.value = deepcopy(init_value.value)
             if outer_shape:
                 for s in reversed(outer_shape):
-                    self.value = [self.value]*s
+                     self.value = [deepcopy(self.value) for _ in range(s)]
 
         elif isinstance(init_value, list):
             queue = init_value
@@ -32,10 +32,10 @@ class array:
             if not all(isinstance(v, Number) for v in queue):
                 raise TypeError('Only numbers or lists are allowed in a legal list')
 
-            self.value = deepcopy(init_value)
+            self.value = init_value
             if outer_shape:
                 for s in reversed(outer_shape):
-                    self.value = [self.value]*s
+                    self.value = [deepcopy(self.value) for _ in range(s)]
             self.shape = self.check_shape()
 
         elif isinstance(init_value, Number):
@@ -43,7 +43,7 @@ class array:
                 self.shape = tuple(outer_shape)
                 self.value = init_value
                 for s in reversed(outer_shape):
-                    self.value = [self.value]*s
+                     self.value = [deepcopy(self.value) for _ in range(s)]
             else:
                 self.shape = (1, )
                 self.value = [init_value]
@@ -113,7 +113,7 @@ class array:
         res = []
         for d in broadcast_shape[:-1]:  # ex: shape=[2, 3, 4, 5], i=[2, 1, 0]
             fuse *= d
-            res = [res]*d
+            res = [deepcopy(res) for _ in range(d)]
         cnt = 0
         for _ in range(len(broadcast_shape) - len(self.shape)):
             v1 = [v1]
@@ -127,6 +127,8 @@ class array:
                 pointer1 = pointer1[min(i, len(pointer1)-1)]
                 pointer2 = pointer2[min(i, len(pointer2)-1)]
             indexes[-1] += 1
+            print(f'p1 : {pointer1}')
+            print(f'p2 : {pointer2}')
             # carry the digits
             for i in reversed(range(len(indexes))):
                 if i > 0 and indexes[i] >= broadcast_shape[i]:
