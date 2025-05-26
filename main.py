@@ -18,6 +18,12 @@ if __name__ == '__main__':
     c = -b + a
     print(f'testing : ')
     print(c.value)
+    c = abs(c)
+    # print(f'testing : ')
+    print(c.value)
+
+    c = 0.5 + c
+    print(c.value)
 
     # aNP = np.array(a.value)
     # bNP = np.array(b.value)

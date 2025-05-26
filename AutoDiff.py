@@ -48,7 +48,7 @@ class array:
                 self.shape = (1,)
                 self.value = [init_value]
 
-    def flatten(self):
+    def flatten(self) -> list:
         _flatten_list = []
 
         def _flatten(lst):
@@ -60,7 +60,7 @@ class array:
         _flatten(self.value)
         return _flatten_list
 
-    def check_shape(self):
+    def check_shape(self) -> tuple:
         arr = self.value
         shape = ()
         while isinstance(arr, list):
@@ -69,7 +69,7 @@ class array:
         self.shape = shape
         return shape
 
-    def broadcast_with(self, other: Number | ListAlike):
+    def broadcast_with(self, other: Number | ListAlike) -> tuple:
         """
         Try to broadcast between 2 arrays. If each dim are equivalent or =1 then they can broadcast
         :param other: The other number or list-like numbers
@@ -94,7 +94,7 @@ class array:
                 raise TypeError(f'Cannot broadcast between {shape1} and {shape2}, miss matched at {d1} and {d2}')
         return result
 
-    def elementwise(self, op, other: array = None):
+    def elementwise(self, op, other: array = None) -> array:
         """
         Performs elementwise operation on 1 or 2 lists
         :param op: [+, -, *, /, -(neg), abs]
@@ -156,7 +156,7 @@ class array:
         res_arr.shape = broadcast_shape
         return res_arr
 
-    def _elementwise_unary(self, op):
+    def _elementwise_unary(self, op) -> array:
         res_arr = array(0)
         res_arr.shape = self.shape
         res_arr.value = deepcopy(self.value)
@@ -171,26 +171,41 @@ class array:
                 pointer[i][j] = op(pointer[i][j])
         return res_arr
 
-    def __add__(self, other: Number | ListAlike):
+    def __add__(self, other: Number | ListAlike) -> array:
         other_arr = array(other)
         return self.elementwise(operator.add, other_arr)
 
-    def __sub__(self, other: Number | ListAlike):
+    def __radd__(self, other: Number | ListAlike) -> array:
+        return self + other
+
+    def __sub__(self, other: Number | ListAlike) -> array:
         other_arr = array(other)
         return self.elementwise(operator.sub, other_arr)
 
-    def __mul__(self, other: Number | ListAlike):
+    def __rsub__(self, other: Number | ListAlike) -> array:
+        other_arr = array(other)
+        return other_arr - self
+
+    def __mul__(self, other: Number | ListAlike) -> array:
         other_arr = array(other)
         return self.elementwise(operator.mul, other_arr)
 
-    def __truediv__(self, other: Number | ListAlike):
+    def __rmul__(self, other: Number | ListAlike) -> array:
+        other_arr = array(other)
+        return other_arr * self
+
+    def __truediv__(self, other: Number | ListAlike) -> array:
         other_arr = array(other)
         return self.elementwise(operator.truediv, other_arr)
 
-    def __neg__(self):
+    def __rtruediv__(self, other: Number | ListAlike) -> array:
+        other_arr = array(other)
+        return other_arr / self
+
+    def __neg__(self) -> array:
         return self.elementwise(operator.neg)
 
-    def __abs__(self):
+    def __abs__(self) -> array:
         return self.elementwise(operator.abs)
 
 
