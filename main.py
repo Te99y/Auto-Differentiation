@@ -24,6 +24,9 @@ if __name__ == '__main__':
 
     c = 0.5 + c
     print(c.value)
+    d = c.log()
+    print(d.value)
+    print(c.value)
 
     # aNP = np.array(a.value)
     # bNP = np.array(b.value)

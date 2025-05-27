@@ -96,10 +96,10 @@ class array:
 
     def elementwise(self, op, other: array = None) -> array:
         """
-        Performs elementwise operation on 1 or 2 lists
+        Performs elementwise operation on 1 or 2 arrays
         :param op: [+, -, *, /, -(neg), abs]
         :param other: Another list
-        :return: The result as a list
+        :return: The result array
         """
         if not other:
             return self._elementwise_unary(op)
@@ -208,6 +208,12 @@ class array:
     def __abs__(self) -> array:
         return self.elementwise(operator.abs)
 
+    def exp(self) -> array:
+        return self.elementwise(math.exp)
+
+    def log(self) -> array:
+        return self.elementwise(math.log)
+
 
 class tensor:
     def __init__(self, value: Number | list | array):
@@ -309,7 +315,7 @@ class tensor:
 
 def log(v: tensor | Number):
     v_tensor = v if isinstance(v, tensor) else tensor(v)
-    log_tensor = tensor(math.log(v_tensor.arr))
+    log_tensor = tensor(v_tensor.arr.log())
     log_tensor.op_name = 'log'
     log_tensor.gradient_wrt_parent = [1.0 / v_tensor.arr]
     log_tensor.add_parent(v_tensor)
@@ -319,7 +325,7 @@ def log(v: tensor | Number):
 
 def exp(v: tensor | Number):
     v_tensor = v if isinstance(v, tensor) else tensor(v)
-    exp_tensor = tensor(math.exp(v_tensor.arr))
+    exp_tensor = tensor(v_tensor.arr.exp())
     exp_tensor.op_name = 'exp'
     exp_tensor.gradient_wrt_parent = [exp_tensor.arr]
     exp_tensor.add_parent(v_tensor)
