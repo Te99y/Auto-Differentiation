@@ -59,8 +59,7 @@ class array:
 
         def _flatten(lst):
             if isinstance(lst[0], list):
-                for li in lst:
-                    _flatten(li)
+                for li in lst: _flatten(li)  # noqa: E701
             else:
                 _flatten_list.extend(lst)
 
@@ -80,7 +79,7 @@ class array:
         """
         Try to broadcast between 2 arrays. If each dim are equivalent or =1 then they can broadcast
         :param other: The other number or list-like numbers
-        :return: If broadcastable : The shape of the simplest broadcast shape
+        :return: If broadcastable : The shape of the simplest broadcast shape.
                  Otherwise : None
         """
         shape1 = self.shape
@@ -464,7 +463,7 @@ def exp(v: tensor | Number):
 
 def sin(v: tensor | Number):
     v_tensor = v if isinstance(v, tensor) else tensor(v, requires_grad=False)
-    sin_tensor = tensor(v_tensor.arr.exp(), requires_grad=False)
+    sin_tensor = tensor(v_tensor.arr.sin(), requires_grad=False)
     sin_tensor.op_name = 'sin'
     sin_tensor.tangent_wrt_parent = [v_tensor.arr.cos()]
     sin_tensor.add_parent(v_tensor)
@@ -474,7 +473,7 @@ def sin(v: tensor | Number):
 
 def cos(v: tensor | Number):
     v_tensor = v if isinstance(v, tensor) else tensor(v, requires_grad=False)
-    cos_tensor = tensor(v_tensor.arr.exp(), requires_grad=False)
+    cos_tensor = tensor(v_tensor.arr.cos(), requires_grad=False)
     cos_tensor.op_name = 'cos'
     cos_tensor.tangent_wrt_parent = [-v_tensor.arr.sin()]
     cos_tensor.add_parent(v_tensor)
