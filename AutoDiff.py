@@ -2,7 +2,7 @@ from __future__ import annotations
 import math
 import operator
 from typing import Union
-from enum import IntEnum, auto
+# from enum import IntEnum, auto
 from copy import deepcopy
 
 TENSOR_MAP = []
@@ -10,25 +10,12 @@ Number = Union[int | float]
 ListLike = Union['array', 'tensor', list]
 
 
-class opTag(IntEnum):
-    # Unary
-    ABS = auto();
-    NEG = auto();
-    EXP = auto();
-    LOG = auto();
-    SIN = auto();
-    COS = auto()  # noqa: E702 E225
-    # Binary
-    ADD = auto();
-    SUB = auto();
-    MUL = auto();
-    DIV = auto()  # noqa: E702 E225
-    # Const, no op
-    NON = auto()  # noqa: E702 E225
-
-
 class array:
-    def __init__(self, init_value: Number | ListLike, outer_shape: list | tuple = ()):
+    """
+    The class that does actual numerical operations.
+    Currently, if an inplace operation is called, a new list is assigned to self.value
+    """
+    def __init__(self, init_value: Number | ListLike, outer_shape: list | tuple = ()) -> None:
         self.shape: tuple
         self.value: list
         outer_shape = tuple(outer_shape)
@@ -71,13 +58,15 @@ class array:
             else:
                 self.shape = (1,)
                 self.value = [init_value]
+        else:
+            raise ValueError('How did you even get here?')
 
     def flatten(self) -> list:
         _flatten_list = []
 
         def _flatten(lst):
             if isinstance(lst[0], list):
-                for li in lst: _flatten(li)
+                for li in lst: _flatten(li)  # noqa: E701
             else:
                 _flatten_list.extend(lst)
 
@@ -121,7 +110,7 @@ class array:
         """
         Performs elementwise operation on 1 or 2 arrays
 
-        :param op: [+, -, *, /, -(neg), abs]
+        :param op: [+, -, *, /, neg, abs, exp, log, cos, sin]
         :param other: Another list
         :param inplace: perform the op inplace or not
         :return: The result array
@@ -180,6 +169,10 @@ class array:
 
         # TODO: inplace add
         # Currently if inplace is True, we just points self.value to new array
+        # result_array = self if inplace else array(0)
+        # result_array.value = res
+        # result_array.shape = broadcast_shape
+        # Turns out if we do the above, we won't be able to differentiate due to not creating a new tensor
         result_array = self if inplace else array(0)
         result_array.value = res
         result_array.shape = broadcast_shape
@@ -266,9 +259,12 @@ class array:
     def __abs__(self) -> array:
         return self.elementwise(operator.abs)
 
-    def __pow__(self, power, modulo=None) -> array:
+    def __pow__(self, power: Number, modulo=None) -> array:
         power = array(power)
         return self.elementwise(operator.pow, power)
+
+    def __rpow__(self, other):
+        raise NotImplementedError('rpow with an array is not implemented')
 
     def __ipow__(self, power, modulo=None) -> array:
         return self.elementwise(operator.pow, power, inplace=True)
@@ -293,29 +289,41 @@ class array:
 
 
 class tensor:
+    """
+    A tensor stores an array in it. Performing math operations on 1 or 2 tensors would create a new
+    tensor. The 1 or 2 tensors will be the parents of the new tensor, and the new tensor would be the
+    child of the 1 or 2 tensors. This relationship is essentially the computation graph.
+    Currently, when an inplace operation is performed, a new tensor is created. This is done because
+    passing differential would be easier. Otherwise, a version tracker is required.
 
+    Since we define our computation graph by performing operations on tensors (aka we do a complete
+    forward-pass), the graph is dynamic, meaning that after each value pass, just we discard it.
+    Pytorch is based on dynamic-graph while TensorFlow and Jax implements static graph. In that
+    case they would save the graph and reuse it, which would require the ._prop_val() function.
+    """
     def __init__(self,
                  value: Number | list | array | tensor,
                  op_name: str = '   ',
                  requires_grad: bool = True,
                  is_leaf: bool = True):
         self.arr = array(value)
-        self.op_name = op_name  # default leaf node
-        self.requires_grad = requires_grad
-        self.is_leaf = is_leaf
-        self._tangent = array(0, outer_shape=self.arr.shape)
-        self._gradient = 0.0
+        self.shape = self.arr.shape
+        self.op_name = op_name  # default leaf node = '   '
+        self.requires_grad = requires_grad  # Allow gradients to flow through it
+        self.is_leaf = is_leaf  # I like to call it root, but it's leaf as they appear on the tree structure
         self.tag = len(TENSOR_MAP)
         self.child: list[tensor] = []
         self.parent: list[tensor] = []
-        self.tangent_wrt_parent: list[Number] = []
-        self._propagate_tan = lambda: None  # default do nothing
+        self._tangent = array(0)
+        self._gradient = array(0)
+        self._prop_tan = lambda: None  # default do nothing
+        # self._prop_val = lambda: None  # default do nothing
         TENSOR_MAP.append(self)
 
     def topo(self, visited: set, order: list, roots: list):
         if self.parent:
-            for p in self.parent: None if p in visited else p.topo(visited, order, roots)
-        elif self.requires_grad:
+            for p in self.parent: None if p in visited else p.topo(visited, order, roots)  # noqa: E701
+        elif self.is_leaf and self.requires_grad:
             roots.append(self)
         order.append(self)
         visited.add(self)
@@ -368,10 +376,11 @@ class tensor:
         self.add_child(add_tensor)
         other_tensor.add_child(add_tensor)
 
-        def _propagate_tan():
-            add_tensor._tangent = self._tangent + other_tensor._tangent
+        def _prop_tan(): add_tensor._tangent = self._tangent + other_tensor._tangent
+        add_tensor._prop_tan = _prop_tan
+        # def _prop_val(): add_tensor.arr = self.arr + other_tensor.arr
+        # add_tensor._prop_val = _prop_val
 
-        add_tensor._propagate_tan = _propagate_tan
         return add_tensor
 
     def __radd__(self, other) -> tensor:
@@ -379,8 +388,8 @@ class tensor:
 
     def __iadd__(self, other) -> tensor:
         other_tensor = other if isinstance(other, tensor) else tensor(other)
-        self.arr += other_tensor.arr
-        return self
+        # self.arr += other_tensor.arr
+        return self + other_tensor
 
     def __sub__(self, other) -> tensor:
         other_tensor = other if isinstance(other, tensor) else tensor.const_tensor(other)
@@ -388,6 +397,11 @@ class tensor:
         sub_tensor.add_parent(self, other_tensor)
         self.add_child(sub_tensor)
         other_tensor.add_child(sub_tensor)
+
+        def _prop_tan(): sub_tensor._tangent = self._tangent - other_tensor._tangent
+        sub_tensor._prop_tan = _prop_tan
+        # def _prop_val(): sub_tensor.arr = self.arr - other_tensor.arr
+        # sub_tensor._prop_val = _prop_val
         return sub_tensor
 
     def __rsub__(self, other) -> tensor:
@@ -396,21 +410,29 @@ class tensor:
 
     def __isub__(self, other) -> tensor:
         other_tensor = other if isinstance(other, tensor) else tensor(other)
-        self.arr -= other_tensor.arr
-        return self
+        # self.arr -= other_tensor.arr
+        return self - other_tensor
 
     def __abs__(self) -> tensor:
         abs_tensor = tensor.intermediate_tensor(self.arr.abs(), op_name='abs')
         abs_tensor.add_parent(self)
-        abs_tensor.arr = self.arr.abs()
         self.add_child(abs_tensor)
+
+        def _prop_tan(): abs_tensor._tangent = array(self._tangent).elementwise(sign)
+        abs_tensor._prop_tan = _prop_tan
+        # def _prop_val(): abs_tensor.arr = abs(self.arr)
+        # abs_tensor._prop_val = _prop_val
         return abs_tensor
 
     def __neg__(self) -> tensor:
         neg_tensor = tensor.intermediate_tensor(-self.arr, op_name='neg')
         neg_tensor.add_parent(self)
-        neg_tensor.arr = -self.arr
         self.add_child(neg_tensor)
+
+        def _prop_tan(): neg_tensor._tangent = -self._tangent
+        neg_tensor._prop_tan = _prop_tan
+        # def _prop_val(): neg_tensor.arr = -self.arr
+        # neg_tensor._prop_val = _prop_val
         return neg_tensor
 
     def __mul__(self, other) -> tensor:
@@ -419,6 +441,14 @@ class tensor:
         mul_tensor.add_parent(self, other_tensor)
         self.add_child(mul_tensor)
         other_tensor.add_child(mul_tensor)
+
+        def _prop_tan():
+            a = other_tensor.arr
+            b = self
+            mul_tensor._tangent = other_tensor.arr*self._tangent + self.arr*other_tensor._tangent
+        mul_tensor._prop_tan = _prop_tan
+        # def _prop_val(): mul_tensor.arr = self.arr * other_tensor.arr
+        # mul_tensor._prop_val = _prop_val
         return mul_tensor
 
     def __rmul__(self, other) -> tensor:
@@ -426,8 +456,8 @@ class tensor:
 
     def __imul__(self, other) -> tensor:
         other_tensor = other if isinstance(other, tensor) else tensor(other)
-        self.arr *= other_tensor.arr
-        return self
+        # self.arr *= other_tensor.arr
+        return self * other_tensor
 
     def __truediv__(self, other) -> tensor:
         other_tensor = other if isinstance(other, tensor) else tensor.const_tensor(other)
@@ -435,6 +465,13 @@ class tensor:
         div_tensor.add_parent(self, other_tensor)
         self.add_child(div_tensor)
         other_tensor.add_child(div_tensor)
+
+        def _prop_tan():
+            one_over_b = 1/other_tensor.arr
+            div_tensor._tangent = one_over_b*(self._tangent - self.arr * one_over_b * other_tensor._tangent)
+        div_tensor._prop_tan = _prop_tan
+        # def _prop_val(): div_tensor.arr = self.arr / other_tensor.arr
+        # div_tensor._prop_val = _prop_val
         return div_tensor
 
     def __rtruediv__(self, other) -> tensor:
@@ -443,11 +480,12 @@ class tensor:
 
     def __itruediv__(self, other) -> tensor:
         other_tensor = other if isinstance(other, tensor) else tensor(other)
-        self.arr /= other_tensor.arr
-        return self
+        # self.arr /= other_tensor.arr
+        return self / other_tensor
 
-    def shape(self) -> tuple:
-        return self.arr.shape
+    def check_shape(self) -> tuple:
+        self.shape = self.arr.check_shape()
+        return self.shape
 
     def abs(self) -> tensor:
         return abs(self)
@@ -457,32 +495,62 @@ class tensor:
 
     def exp(self) -> tensor:
         exp_tensor = tensor.intermediate_tensor(self.arr.exp(), op_name='exp')
-        exp_tensor.tangent_wrt_parent = [exp_tensor.arr]
         exp_tensor.add_parent(self)
         self.add_child(exp_tensor)
+
+        def _prop_tan():
+            exp_tensor._tangent = self._tangent * exp_tensor.arr
+        exp_tensor._prop_tan = _prop_tan
         return exp_tensor
 
     def log(self) -> tensor:
         log_tensor = tensor.intermediate_tensor(self.arr.log(), op_name='log')
         log_tensor.add_parent(self)
         self.add_child(log_tensor)
+
+        def _prop_tan():
+            log_tensor._tangent = self._tangent / self.arr
+        log_tensor._prop_tan = _prop_tan
         return log_tensor
 
     def sin(self) -> tensor:
         sin_tensor = tensor.intermediate_tensor(self.arr.sin(), op_name='sin')
         sin_tensor.add_parent(self)
         self.add_child(sin_tensor)
+
+        def _prop_tan():
+            sin_tensor._tangent = self.arr.cos() * self._tangent
+        sin_tensor._prop_tan = _prop_tan
         return sin_tensor
 
     def cos(self) -> tensor:
         cos_tensor = tensor.intermediate_tensor(self.arr.cos(), op_name='cos')
         cos_tensor.add_parent(self)
         self.add_child(cos_tensor)
+
+        def _prop_tan():
+            cos_tensor._tangent = -self.arr.sin() * self._tangent
+        cos_tensor._prop_tan = _prop_tan
         return cos_tensor
+
+    def pow(self, p: Number) -> tensor:
+        pow_tensor = tensor.intermediate_tensor(pow(self.arr, p), op_name='pow')
+        pow_tensor.add_parent(self)
+        self.add_child(pow_tensor)
+
+        def _prop_tan():
+            # pow_tensor._tangent = self.arr.elementwise(lambda x: 0 if x == 0 else pow(x, p-1)) * self._tangent
+            pow_tensor._tangent = pow_tensor.arr/self.arr * self._tangent  # When x == 0 this will cause problem
+        pow_tensor._prop_tan = _prop_tan
+        return pow_tensor
 
 
 def all_tensors():
     print('\n'.join([t.__str__() for t in TENSOR_MAP], ))
+
+
+def neg(v: tensor | Number) -> float | tensor:
+    return v.neg() if isinstance(v, tensor) else -v
 
 
 def log(v: tensor | Number) -> float | tensor:
@@ -501,18 +569,41 @@ def cos(v: tensor | Number) -> float | tensor:
     return v.cos() if isinstance(v, tensor) else math.cos(v)
 
 
+def add(v1, v2: tensor | Number) -> float | tensor:
+    return v1 + v2
+
+
+def sub(v1, v2: tensor | Number) -> float | tensor:
+    return v1 - v2
+
+
+def mul(v1, v2: tensor | Number) -> float | tensor:
+    return v1 * v2
+
+
+def div(v1, v2: tensor | Number) -> float | tensor:
+    return v1 / v2
+
+
 def identity(shape: int) -> float | array:
     if shape < 1:
         raise ValueError('Identity matrix must be init with shape >= 1')
     return 1.0 if shape == 1 else array([[float(j == i) for j in range(shape)] for i in range(shape)])
 
 
-def jvp(f: tensor | list[tensor], primal: list[array], direction: list | tuple | array):
+def sign(v: Number) -> float:
+    return 1.0 if v > 0 else -1.0 if v < 0 else 0.0
+
+
+def jvp(f: tensor, direction: list[array] | tuple[array]):
     """
-    Calculate the JVP where J is the |inputs|x|output| Jacobian, V is the param: direction.\n
-    If not provided, calculate the gradient of self(usually an output) w.r.t every root with 1 forward sweep.\n
+    Calculate the JVP where J is the |inputs|x|output| Jacobian, V is the direction vector.
     The intermediate tangents are stored in tensor._tangent along the tensors on the way.\n
     From JAX: jax.jvp(f, primals=(x,), tangents=(v,))
+
+    Whats it does:
+    Given a tensor, build topology order and find the root tensors.
+    From the root tensors, use direction as tangent seeds.
 
     :param f: The function to differentiate
     :param primal: The value of the roots
@@ -520,15 +611,12 @@ def jvp(f: tensor | list[tensor], primal: list[array], direction: list | tuple |
                       The linear combination of Jacobian columns you're interested in.
     :return: None
    """
-    if isinstance(f, list):
-        pass
     visited = set()
     order: list[tensor] = []
     roots: list[tensor] = []
     f.topo(visited, order, roots)
-    if isinstance(direction, array) and (len(primal),) != direction.shape or len(primal) != len(direction):
-        raise ValueError('direction and target vector length does not match')
+    if len(roots) != len(direction):
+        raise ValueError('length of direction and number of roots does not match')
 
     for r in roots:
-        if r not in visited: raise ValueError(f'{r} is in target but was not visited')  # noqa: E701
-        r._tangent = 1.0
+
