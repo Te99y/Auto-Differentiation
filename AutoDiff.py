@@ -12,6 +12,8 @@ ListLike = Union['array', 'tensor', list]
 
 class array:
     """
+    An array stores a nd-list of numbers as its value, and its shape is the shape of the list.
+    Natively float64 is used, so it holds
     The class that does actual numerical operations.
     Currently, if an inplace operation is called, a new list is assigned to self.value
     """
@@ -317,7 +319,7 @@ class tensor:
         self._tangent = array(0)
         self._gradient = array(0)
         self._prop_tan = lambda: None  # default do nothing
-        # self._prop_val = lambda: None  # default do nothing
+        self._prop_val = lambda: None  # default do nothing
         TENSOR_MAP.append(self)
 
     def topo(self, visited: set, order: list, roots: list):
@@ -378,8 +380,8 @@ class tensor:
 
         def _prop_tan(): add_tensor._tangent = self._tangent + other_tensor._tangent
         add_tensor._prop_tan = _prop_tan
-        # def _prop_val(): add_tensor.arr = self.arr + other_tensor.arr
-        # add_tensor._prop_val = _prop_val
+        def _prop_val(): add_tensor.arr = self.arr + other_tensor.arr
+        add_tensor._prop_val = _prop_val
 
         return add_tensor
 
@@ -400,8 +402,8 @@ class tensor:
 
         def _prop_tan(): sub_tensor._tangent = self._tangent - other_tensor._tangent
         sub_tensor._prop_tan = _prop_tan
-        # def _prop_val(): sub_tensor.arr = self.arr - other_tensor.arr
-        # sub_tensor._prop_val = _prop_val
+        def _prop_val(): sub_tensor.arr = self.arr - other_tensor.arr
+        sub_tensor._prop_val = _prop_val
         return sub_tensor
 
     def __rsub__(self, other) -> tensor:
@@ -420,8 +422,8 @@ class tensor:
 
         def _prop_tan(): abs_tensor._tangent = array(self._tangent).elementwise(sign)
         abs_tensor._prop_tan = _prop_tan
-        # def _prop_val(): abs_tensor.arr = abs(self.arr)
-        # abs_tensor._prop_val = _prop_val
+        def _prop_val(): abs_tensor.arr = abs(self.arr)
+        abs_tensor._prop_val = _prop_val
         return abs_tensor
 
     def __neg__(self) -> tensor:
@@ -431,8 +433,8 @@ class tensor:
 
         def _prop_tan(): neg_tensor._tangent = -self._tangent
         neg_tensor._prop_tan = _prop_tan
-        # def _prop_val(): neg_tensor.arr = -self.arr
-        # neg_tensor._prop_val = _prop_val
+        def _prop_val(): neg_tensor.arr = -self.arr
+        neg_tensor._prop_val = _prop_val
         return neg_tensor
 
     def __mul__(self, other) -> tensor:
@@ -442,13 +444,10 @@ class tensor:
         self.add_child(mul_tensor)
         other_tensor.add_child(mul_tensor)
 
-        def _prop_tan():
-            a = other_tensor.arr
-            b = self
-            mul_tensor._tangent = other_tensor.arr*self._tangent + self.arr*other_tensor._tangent
+        def _prop_tan(): mul_tensor._tangent = other_tensor.arr*self._tangent + self.arr*other_tensor._tangent
         mul_tensor._prop_tan = _prop_tan
-        # def _prop_val(): mul_tensor.arr = self.arr * other_tensor.arr
-        # mul_tensor._prop_val = _prop_val
+        def _prop_val(): mul_tensor.arr = self.arr * other_tensor.arr
+        mul_tensor._prop_val = _prop_val
         return mul_tensor
 
     def __rmul__(self, other) -> tensor:
@@ -467,11 +466,11 @@ class tensor:
         other_tensor.add_child(div_tensor)
 
         def _prop_tan():
-            one_over_b = 1/other_tensor.arr
+            one_over_b = 1.0 / other_tensor.arr
             div_tensor._tangent = one_over_b*(self._tangent - self.arr * one_over_b * other_tensor._tangent)
         div_tensor._prop_tan = _prop_tan
-        # def _prop_val(): div_tensor.arr = self.arr / other_tensor.arr
-        # div_tensor._prop_val = _prop_val
+        def _prop_val(): div_tensor.arr = self.arr / other_tensor.arr
+        div_tensor._prop_val = _prop_val
         return div_tensor
 
     def __rtruediv__(self, other) -> tensor:
@@ -488,19 +487,20 @@ class tensor:
         return self.shape
 
     def abs(self) -> tensor:
-        return abs(self)
+        return self.__abs__()
 
     def neg(self) -> tensor:
-        return -self
+        return self.__neg__()
 
     def exp(self) -> tensor:
         exp_tensor = tensor.intermediate_tensor(self.arr.exp(), op_name='exp')
         exp_tensor.add_parent(self)
         self.add_child(exp_tensor)
 
-        def _prop_tan():
-            exp_tensor._tangent = self._tangent * exp_tensor.arr
+        def _prop_tan(): exp_tensor._tangent = self._tangent * exp_tensor.arr
         exp_tensor._prop_tan = _prop_tan
+        def _prop_val(): exp_tensor.arr = self.arr.exp()
+        exp_tensor._prop_val = _prop_val
         return exp_tensor
 
     def log(self) -> tensor:
@@ -508,9 +508,10 @@ class tensor:
         log_tensor.add_parent(self)
         self.add_child(log_tensor)
 
-        def _prop_tan():
-            log_tensor._tangent = self._tangent / self.arr
+        def _prop_tan(): log_tensor._tangent = self._tangent / self.arr
         log_tensor._prop_tan = _prop_tan
+        def _prop_val(): log_tensor.arr = self.arr.log()
+        log_tensor._prop_val = _prop_val
         return log_tensor
 
     def sin(self) -> tensor:
@@ -518,9 +519,10 @@ class tensor:
         sin_tensor.add_parent(self)
         self.add_child(sin_tensor)
 
-        def _prop_tan():
-            sin_tensor._tangent = self.arr.cos() * self._tangent
+        def _prop_tan(): sin_tensor._tangent = self.arr.cos() * self._tangent
         sin_tensor._prop_tan = _prop_tan
+        def _prop_val(): sin_tensor.arr = self.arr.sin()
+        sin_tensor._prop_val = _prop_val
         return sin_tensor
 
     def cos(self) -> tensor:
@@ -528,9 +530,10 @@ class tensor:
         cos_tensor.add_parent(self)
         self.add_child(cos_tensor)
 
-        def _prop_tan():
-            cos_tensor._tangent = -self.arr.sin() * self._tangent
+        def _prop_tan(): cos_tensor._tangent = -self.arr.sin() * self._tangent
         cos_tensor._prop_tan = _prop_tan
+        def _prop_val(): cos_tensor.arr = self.arr.cos()
+        cos_tensor._prop_val = _prop_val
         return cos_tensor
 
     def pow(self, p: Number) -> tensor:
@@ -542,6 +545,8 @@ class tensor:
             # pow_tensor._tangent = self.arr.elementwise(lambda x: 0 if x == 0 else pow(x, p-1)) * self._tangent
             pow_tensor._tangent = pow_tensor.arr/self.arr * self._tangent  # When x == 0 this will cause problem
         pow_tensor._prop_tan = _prop_tan
+        def _prop_val(): pow_tensor.arr = self.arr.__pow__(p)
+        pow_tensor._prop_val = _prop_val
         return pow_tensor
 
 
@@ -595,7 +600,7 @@ def sign(v: Number) -> float:
     return 1.0 if v > 0 else -1.0 if v < 0 else 0.0
 
 
-def jvp(f: tensor, direction: list[array] | tuple[array]):
+def jvp(f: tensor, inputs: list[array] | tuple[array], directions: list[array] | tuple[array]):
     """
     Calculate the JVP where J is the |inputs|x|output| Jacobian, V is the direction vector.
     The intermediate tangents are stored in tensor._tangent along the tensors on the way.\n
@@ -606,8 +611,8 @@ def jvp(f: tensor, direction: list[array] | tuple[array]):
     From the root tensors, use direction as tangent seeds.
 
     :param f: The function to differentiate
-    :param primal: The value of the roots
-    :param direction: A vector of n elements to perform JVP with.
+    :param inputs: The value of the roots
+    :param directions: A vector of n elements to perform JVP with.
                       The linear combination of Jacobian columns you're interested in.
     :return: None
    """
@@ -615,8 +620,17 @@ def jvp(f: tensor, direction: list[array] | tuple[array]):
     order: list[tensor] = []
     roots: list[tensor] = []
     f.topo(visited, order, roots)
-    if len(roots) != len(direction):
-        raise ValueError('length of direction and number of roots does not match')
+    print('order :\n' + "\n".join([t.__str__() for t in order]))
+    print('roots :\n' + "\n".join([t.__str__() for t in roots]))
+    if len(roots) != len(inputs) or len(roots) != len(directions):
+        raise ValueError('Number of roots does not match with length of inputs/directions')
 
-    for r in roots:
+    for r, seed in zip(roots, directions):
+        r._tangent = seed
+
+    for t in order:
+        t._prop_tan()
+
+    # This looks clean af
+    return f._tangent
 
