@@ -5,6 +5,8 @@ from typing import Union
 # from enum import IntEnum, auto
 from copy import deepcopy
 
+import AutoDiff
+
 TENSOR_MAP = []
 Number = Union[int | float]
 ListLike = Union['array', 'tensor', list]
@@ -61,6 +63,9 @@ class array:
                 self.shape = (1,)
                 self.value = [init_value]
         else:
+            print()
+            print(type(init_value))
+            print(init_value)
             raise ValueError('How did you even get here?')
 
     def flatten(self) -> list:
@@ -109,76 +114,95 @@ class array:
         return result
 
     def elementwise(self, op, other: array = None, inplace=False) -> array:
-        """
-        Performs elementwise operation on 1 or 2 arrays
-
-        :param op: [+, -, *, /, neg, abs, exp, log, cos, sin]
-        :param other: Another list
-        :param inplace: perform the op inplace or not
-        :return: The result array
-        """
         if not other:
             return self._elementwise_unary(op)
-
         broadcast_shape = self.broadcast_with(other)
-        v1 = self.value
-        v2 = other.value
-        for _ in range(len(broadcast_shape) - len(self.shape)):
-            v1 = [v1]
-        for _ in range(len(broadcast_shape) - len(other.shape)):
-            v2 = [v2]
-        padded_shape1 = (1,) * (len(broadcast_shape) - len(self.shape)) + self.shape
-        padded_shape2 = (1,) * (len(broadcast_shape) - len(other.shape)) + other.shape
 
-        broadcast_index = [s - 1 for s in broadcast_shape][:-1]
-        padded_index1 = [s - 1 for s in padded_shape1][:-1]
-        padded_index2 = [s - 1 for s in padded_shape2][:-1]
-        indexes = [0] * (len(broadcast_index))
-        fuse = 1
-        res = []
+        def _ew(x1, x2):
+            if isinstance(x1[0], list): return [_ew(x1_i, x2) for x1_i in x1]
+            elif isinstance(x2[0], list): return [_ew(x1, x2_i) for x2_i in x2]
+            else: return [op(x1[min(i, len(x1)-1)], x2[min(i, len(x2)-1)]) for i in range(max(len(x1), len(x2)))]
 
-        for d in reversed(broadcast_shape[:-1]):  # ex: shape=[2, 3, 4, 5], i=[2, 1, 0]
-            fuse *= d
-            temp = res
-            res = [deepcopy(temp) for _ in range(d)]  # prep the shell for most inner layer
-
-        cnt = 0
-        # This is definitely not a good approach
-        while cnt < fuse:
-            pointer1 = v1
-            pointer2 = v2
-            for i, i1, i2 in zip(indexes, padded_index1, padded_index2):
-                pointer1 = pointer1[min(i, i1)]
-                pointer2 = pointer2[min(i, i2)]
-            p = res
-            for i in indexes:
-                p = p[i]  # find the placeholder vector
-            p.extend(  # extend with a whole vector
-                [op(a, pointer2[0]) for a in pointer1] if len(pointer2) == 1
-                else [op(pointer1[0], b) for b in pointer2] if len(pointer2) == 1
-                else [op(p1, p2) for p1, p2 in zip(pointer1, pointer2)])
-
-            # If input is number, index[-1] will raise outOfBound
-            if cnt + 1 >= fuse:
-                break
-            # Move to next index, check carry of each digit
-            indexes[-1] += 1
-            for i in reversed(range(len(indexes))):
-                if i > 0 and indexes[i] > broadcast_index[i]:
-                    indexes[i] = 0
-                    indexes[i - 1] += 1
-            cnt += 1
-
-        # TODO: inplace add
-        # Currently if inplace is True, we just points self.value to new array
-        # result_array = self if inplace else array(0)
-        # result_array.value = res
-        # result_array.shape = broadcast_shape
-        # Turns out if we do the above, we won't be able to differentiate due to not creating a new tensor
         result_array = self if inplace else array(0)
-        result_array.value = res
+        result_array.value = _ew(self.value, other.value)
         result_array.shape = broadcast_shape
         return result_array
+
+    # ==============================================================================================================
+    # Before 20250619 the elementwise method was this crazy big chunk of code, and there would be error
+    # on some edge cases. I'm grateful that I refactored it. It's beautiful now.
+    #
+    # def elementwise(self, op, other: array = None, inplace=False) -> array:
+    #     """
+    #     Performs elementwise operation on 1 or 2 arrays
+    #
+    #     :param op: [+, -, *, /, neg, abs, exp, log, cos, sin]
+    #     :param other: Another list
+    #     :param inplace: perform the op inplace or not
+    #     :return: The result array
+    #     """
+    #     if not other:
+    #         return self._elementwise_unary(op)
+    #
+    #     broadcast_shape = self.broadcast_with(other)
+    #     v1 = self.value
+    #     v2 = other.value
+    #     for _ in range(len(broadcast_shape) - len(self.shape)):
+    #         v1 = [v1]
+    #     for _ in range(len(broadcast_shape) - len(other.shape)):
+    #         v2 = [v2]
+    #     padded_shape1 = (1,) * (len(broadcast_shape) - len(self.shape)) + self.shape
+    #     padded_shape2 = (1,) * (len(broadcast_shape) - len(other.shape)) + other.shape
+    #
+    #     broadcast_index = [s - 1 for s in broadcast_shape][:-1]
+    #     padded_index1 = [s - 1 for s in padded_shape1][:-1]
+    #     padded_index2 = [s - 1 for s in padded_shape2][:-1]
+    #     indexes = [0] * (len(broadcast_index))
+    #     fuse = 1
+    #     res = []
+    #
+    #     for d in reversed(broadcast_shape[:-1]):  # ex: shape=[2, 3, 4, 5], i=[2, 1, 0]
+    #         fuse *= d
+    #         temp = res
+    #         res = [deepcopy(temp) for _ in range(d)]  # prep the shell for most inner layer
+    #
+    #     cnt = 0
+    #     # This is definitely not a good approach
+    #     while cnt < fuse:
+    #         pointer1 = v1
+    #         pointer2 = v2
+    #         for i, i1, i2 in zip(indexes, padded_index1, padded_index2):
+    #             pointer1 = pointer1[min(i, i1)]
+    #             pointer2 = pointer2[min(i, i2)]
+    #         p = res
+    #         for i in indexes:
+    #             p = p[i]  # find the placeholder vector
+    #         p.extend(  # extend with a whole vector
+    #             [op(a, pointer2[0]) for a in pointer1] if len(pointer2) == 1
+    #             else [op(pointer1[0], b) for b in pointer2] if len(pointer2) == 1
+    #             else [op(p1, p2) for p1, p2 in zip(pointer1, pointer2)])
+    #
+    #         # If input is number, index[-1] will raise outOfBound
+    #         if cnt + 1 >= fuse:
+    #             break
+    #         # Move to next index, check carry of each digit
+    #         indexes[-1] += 1
+    #         for i in reversed(range(len(indexes))):
+    #             if i > 0 and indexes[i] > broadcast_index[i]:
+    #                 indexes[i] = 0
+    #                 indexes[i - 1] += 1
+    #         cnt += 1
+    #
+    #     # Currently if inplace is True, we just points self.value to new array
+    #     # result_array = self if inplace else array(0)
+    #     # result_array.value = res
+    #     # result_array.shape = broadcast_shape
+    #     # Turns out if we do the above, we won't be able to differentiate due to not creating a new tensor
+    #     result_array = self if inplace else array(0)
+    #     result_array.value = res
+    #     result_array.shape = broadcast_shape
+    #     return result_array
+    # ==============================================================================================================
 
     def _elementwise_unary(self, op, inplace=False) -> array:
         result_array = self if inplace else array(0)
@@ -272,10 +296,10 @@ class array:
         return self.elementwise(operator.pow, power, inplace=True)
 
     def abs(self) -> array:
-        return abs(self)
+        return self.__abs__()
 
     def neg(self) -> array:
-        return -self
+        return self.__neg__()
 
     def exp(self) -> array:
         return self.elementwise(math.exp)
@@ -369,7 +393,9 @@ class tensor:
         parent_description = [(parent.op_name, parent.tag) for parent in self.parent]
         child_description = [(child.op_name, child.tag) for child in self.child]
         return f'{self.tag} | op:{self.op_name} | parent:{parent_description} | child:{child_description} | ' \
-               f'shape:{self.arr.shape} | value:{self.arr.value}'
+               f'shape:{self.arr.shape}' \
+               f'\n    val:{self.arr}' \
+               f'\n    tan:{self._tangent}'
 
     def __add__(self, other) -> tensor:
         other_tensor = other if isinstance(other, tensor) else tensor.const_tensor(other)
@@ -420,7 +446,7 @@ class tensor:
         abs_tensor.add_parent(self)
         self.add_child(abs_tensor)
 
-        def _prop_tan(): abs_tensor._tangent = array(self._tangent).elementwise(sign)
+        def _prop_tan(): abs_tensor._tangent = self._tangent * self.arr.elementwise(sign)
         abs_tensor._prop_tan = _prop_tan
         def _prop_val(): abs_tensor.arr = abs(self.arr)
         abs_tensor._prop_val = _prop_val
@@ -600,15 +626,17 @@ def sign(v: Number) -> float:
     return 1.0 if v > 0 else -1.0 if v < 0 else 0.0
 
 
-def jvp(f: tensor, inputs: list[array] | tuple[array], directions: list[array] | tuple[array]):
+def jvp(f: tensor, inputs: None | dict[tensor, array], directions: dict[tensor, array]):
     """
     Calculate the JVP where J is the |inputs|x|output| Jacobian, V is the direction vector.
     The intermediate tangents are stored in tensor._tangent along the tensors on the way.\n
-    From JAX: jax.jvp(f, primals=(x,), tangents=(v,))
+    From JAX: jax.jvp(f, primals=(x,), tangents=(v,)), so the x = inputs, v = directions
 
-    Whats it does:
+    What it does:
     Given a tensor, build topology order and find the root tensors.
-    From the root tensors, use direction as tangent seeds.
+    From the root tensors, start to propagate value and tangent forward.
+    It will eventually reach f, and the propagation stops.
+    Returns the ._tangent recorded at f.
 
     :param f: The function to differentiate
     :param inputs: The value of the roots
@@ -620,17 +648,14 @@ def jvp(f: tensor, inputs: list[array] | tuple[array], directions: list[array] |
     order: list[tensor] = []
     roots: list[tensor] = []
     f.topo(visited, order, roots)
-    print('order :\n' + "\n".join([t.__str__() for t in order]))
-    print('roots :\n' + "\n".join([t.__str__() for t in roots]))
-    if len(roots) != len(inputs) or len(roots) != len(directions):
+    if len(roots) > len(directions) or (inputs is not None and len(roots) > len(inputs)):
         raise ValueError('Number of roots does not match with length of inputs/directions')
 
-    for r, seed in zip(roots, directions):
-        r._tangent = seed
+    if inputs is not None:
+        for root in roots: root.arr = array(inputs[root])
+        for t in order: t._prop_val()
+    for root in roots: root._tangent = array(directions[root])
+    for t in order: t._prop_tan()
 
-    for t in order:
-        t._prop_tan()
-
-    # This looks clean af
     return f._tangent
 
