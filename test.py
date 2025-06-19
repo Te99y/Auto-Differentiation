@@ -6,6 +6,7 @@ import AutoDiff as ad
 import coverage
 import jax
 import jax.numpy as jnp
+jax.config.update("jax_enable_x64", True)  # to match python-native float64
 OPS = {
     'unary': [operator.abs, operator.neg, math.exp, math.log, math.sin, math.cos],
     'binary': [operator.add, operator.sub, operator.mul, operator.truediv]
@@ -15,30 +16,30 @@ ITER = 10
 
 jnp_unary = [
     jnp.abs,
-    # jnp.negative,
-    # jnp.exp,
-    # jnp.log,
-    # jnp.sin,
-    # jnp.cos
+    jnp.negative,
+    jnp.exp,
+    jnp.log,
+    jnp.sin,
+    jnp.cos
 ]
 jnp_binary = [
     jnp.add,
-    # jnp.subtract,
-    # jnp.multiply,
-    # jnp.true_divide
+    jnp.subtract,
+    jnp.multiply,
+    jnp.true_divide
 ]
 jnp_to_tensor_map = {
-    # jnp.negative:    ad.neg,
+    jnp.negative:    ad.neg,
     jnp.abs:         abs,
-    # jnp.exp:         ad.exp,
-    # jnp.log:         ad.log,
-    # jnp.sin:         ad.sin,
-    # jnp.cos:         ad.cos,
+    jnp.exp:         ad.exp,
+    jnp.log:         ad.log,
+    jnp.sin:         ad.sin,
+    jnp.cos:         ad.cos,
 
     jnp.add:         ad.add,
-    # jnp.subtract:    ad.sub,
-    # jnp.multiply:    ad.mul,
-    # jnp.true_divide: ad.div,
+    jnp.subtract:    ad.sub,
+    jnp.multiply:    ad.mul,
+    jnp.true_divide: ad.div,
 }
 
 
@@ -192,20 +193,19 @@ class test_tensor(unittest.TestCase):
     #         self.assertEqual(np.cos(a).tolist(), _a.cos().arr.value)
 
     def test_differentiation(self):
-        input_dim = 2
+        input_dim = 20
         # input_dim = np.random.randint(low=1, high=10)
         output_dim = np.random.randint(low=1, high=10)
-        function_depth = 4
+        function_depth = 500
         # function_depth = np.random.randint(low=1, high=10)
         x = np.random.uniform(low=-2, high=2, size=(function_depth, input_dim)).astype(np.float64)
         v = np.random.uniform(low=-2, high=2, size=(function_depth, input_dim))
 
         # create a random function for jax
         # and build the tensor graph in ys at the same time
-
-        # create_random_function_sequence(inputs):
-        ys = [ad.tensor(i.tolist()) for i in x]
         func_seq = []
+        ys = [ad.tensor(i.tolist()) for i in x]
+        root_tensors = [t for t in ys]
 
         def apply_unary(op):
             rand_index = np.random.choice(function_depth)
@@ -213,24 +213,19 @@ class test_tensor(unittest.TestCase):
                 ys[rand_index] = ys[rand_index].abs().log()
                 func_seq.append((rand_index, jnp.abs, (rand_index, )))
                 func_seq.append((rand_index, jnp.log, (rand_index, )))
-                # outputs[rand_index] = op(jnp.abs(rand_root))
             else:
                 ys[rand_index] = jnp_to_tensor_map[op](ys[rand_index])
                 func_seq.append((rand_index, op, (rand_index, )))
-                # outputs[rand_index] = op(rand_root)  # randomly select a root
 
         def apply_binary(op):
             rand_index = np.random.choice(function_depth)
-            # rand_root = outputs[rand_index]
             rand_root_first = np.random.rand() > 0.5
             if rand_root_first:
                 ys[0] = jnp_to_tensor_map[op](ys[rand_index], ys[0])
                 func_seq.append((0, op, (rand_index, 0)))
-                # outputs[0] = op(rand_root, inputs[0])
             else:
                 ys[0] = jnp_to_tensor_map[op](ys[0], ys[rand_index])
                 func_seq.append((0, op, (0, rand_index)))
-                # outputs[0] = op(inputs[0], rand_root)
 
         for _ in range(function_depth):
             func = np.random.choice([apply_unary, apply_binary])
@@ -242,37 +237,18 @@ class test_tensor(unittest.TestCase):
             for target_index, op, operand_indexes in func_seq:
                 args = [outputs[operand] for operand in operand_indexes]
                 outputs[target_index] = op(*args)
-                # inputs.at[target_index].set(op(*operands))
             return outputs
 
         f = random_function
         f(x)
-        print('input :\n')
-        print(x)
-        # print(v)
-        print()
+        (jax_outputs, jax_tangents) = np.array(jax.jvp(f, (x, ), (v, )))
+        tensor_outputs = [y.arr.value for y in ys]
+        # I need to handle float64 - float32 problems, so I just feed everything to np and cast to float32
+        self.assertEqual(np.array(jax_outputs, dtype=np.float32).tolist(), np.array(tensor_outputs, dtype=np.float32).tolist())
 
-        print('tensor y :\n')
-        for y in ys:
-            print(y)
-        print()
-
-        print('jvp :\n')
-        # print(jax.jvp(f, (x, ), (v, ))[0])
-        (outputs, tangents) = np.array(jax.jvp(f, (x, ), (v, )))
-        print(outputs)
-
-        # TODO: Precision problem
-        # TODO: Commit
-        print(outputs[0].tolist(), ys[0].arr.value)
-        # ad.all_tensors()
-
-
-        # for op in OPS['binary']:
-        #     def f(x1, x2):
-        #         return op(x1, x2)
-        #     _x1 = ad.tensor([1, 2, 3])
-        #     _x2 = ad.tensor([[0, -1, -9]])
+        directions = {root: seed.tolist() for root, seed in zip(root_tensors, v)}
+        tensor_tangents = [ad.jvp(y, None, directions).value for y in ys]
+        self.assertEqual(np.array(jax_tangents, dtype=np.float32).tolist(), np.array(tensor_tangents, dtype=np.float32).tolist())
     
 
 cov.stop()
