@@ -15,37 +15,37 @@ if __name__ == '__main__':
     # print(f'b.check shape : {b.check_shape()}')
     # print()
 
-    a = ad.array([1, 2, 3])
-    b = ad.array(-9)
+    a = ad.array([[1, 2, 3], [11, 12, 13]])
+    b = ad.array([[[-9, -1, -9], [-9, -1, -9], [-9, -1, -9]]])
 
     t1 = ad.tensor(a)
     t2 = ad.tensor(b)
 
-    t3 = ad.tensor([2, 2, 1])
-    # t3 += t2
+    print(t1.abs())
+    print(t2.abs())
 
     # y = ((t1 - t2).exp() - t3.abs().log()) + 2*t3
-    y = ((t1 - t2).log()).neg().abs()
+    # y = ((t1 - t2).log()).neg().abs()
+    #
+    # print(f't1: {t1}')
+    # print(f't2: {t2}')
+    # print(f't3: {t3}')
+    # print(f' y: {y}')
+    # # y._propagate_tan()
+    # print()
 
-    print(f't1: {t1}')
-    print(f't2: {t2}')
-    print(f't3: {t3}')
-    print(f' y: {y}')
-    # y._propagate_tan()
-    print()
-
-    order, roots = y.grad_forward_mode()
-    print('\n'.join(t.__str__() for t in order))
-    print()
-    print('\n'.join(t.__str__() for t in roots))
-    print()
-
-    t1._tangent = ad.array([1, 1, 1])
-    t2._tangent = ad.array([0, 0, 0])
-    t3._tangent = ad.array([10, 10, 10])
-    for t in order:
-        t._prop_tan()
-    print(y._tangent)
+    # order, roots = y.grad_forward_mode()
+    # print('\n'.join(t.__str__() for t in order))
+    # print()
+    # print('\n'.join(t.__str__() for t in roots))
+    # print()
+    #
+    # t1._tangent = ad.array([1, 1, 1])
+    # t2._tangent = ad.array([0, 0, 0])
+    # t3._tangent = ad.array([10, 10, 10])
+    # for t in order:
+    #     t._prop_tan()
+    # print(y._tangent)
 
     #
     # ad.TENSOR_MAP = []
