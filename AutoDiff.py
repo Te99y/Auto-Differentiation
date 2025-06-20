@@ -69,6 +69,7 @@ class array:
             raise ValueError('How did you even get here?')
 
     def flatten(self) -> list:
+        # Refine this function
         _flatten_list = []
 
         def _flatten(lst):
@@ -90,6 +91,7 @@ class array:
         return shape
 
     def broadcast_with(self, other: Number | ListLike) -> tuple:
+        # Refine this function
         """
         Try to broadcast between 2 arrays. If each dim are equivalent or =1 then they can broadcast
         :param other: The other number or list-like numbers
@@ -116,7 +118,6 @@ class array:
     def elementwise(self, op, other: array = None, inplace=False) -> array:
         if not other:
             return self._elementwise_unary(op)
-        broadcast_shape = self.broadcast_with(other)
 
         def _ew(x1, x2):
             if isinstance(x1[0], list): return [_ew(x1_i, x2) for x1_i in x1]
@@ -125,7 +126,7 @@ class array:
 
         result_array = self if inplace else array(0)
         result_array.value = _ew(self.value, other.value)
-        result_array.shape = broadcast_shape
+        result_array.shape = self.broadcast_with(other)
         return result_array
 
     # ==============================================================================================================
@@ -294,6 +295,22 @@ class array:
 
     def __ipow__(self, power, modulo=None) -> array:
         return self.elementwise(operator.pow, power, inplace=True)
+
+    def __matmul__(self, other) -> array:
+        other_arr = array(other)
+        if self.shape[-1] != other_arr.shape[-2]:
+            raise ValueError(f'The last dim of {self.shape} does not equal the second to last dim '
+                             f'of the {other_arr.shape}. Refer to the signature (...,n,k),(...,k,m)->(...,n,m).')
+
+        for dim1, dim2 in zip(reversed(self.shape[2:]), reversed(other_arr.shape[2:])):
+            if dim1 != dim2 and dim1 != 0 and dim2 != 0:
+                raise ValueError(f'Cannot broadcast between {self.shape} and {other_arr.shape}.')
+
+
+
+
+
+
 
     def abs(self) -> array:
         return self.__abs__()
@@ -507,6 +524,32 @@ class tensor:
         other_tensor = other if isinstance(other, tensor) else tensor(other)
         # self.arr /= other_tensor.arr
         return self / other_tensor
+    
+    def __matmul__(self, other) -> tensor:
+        other_tensor = other if isinstance(other, tensor) else tensor.const_tensor(other)
+        matmul_tensor = tensor.intermediate_tensor(self.arr @ other_tensor.arr, op_name='mat')
+        matmul_tensor.add_parent(self, other_tensor)
+        self.add_child(matmul_tensor)
+        other_tensor.add_child(matmul_tensor)
+
+        def _prop_tan(): matmul_tensor._tangent = self._tangent*other_tensor.arr + self.arr*other_tensor._tangent
+        matmul_tensor._prop_tan = _prop_tan
+        def _prop_val(): matmul_tensor.arr = self.arr / other_tensor.arr
+        matmul_tensor._prop_val = _prop_val
+        return matmul_tensor
+
+    def __rmatmul__(self, other) -> tensor:
+        other_tensor = other if isinstance(other, tensor) else tensor.const_tensor(other)
+        matmul_tensor = tensor.intermediate_tensor(self.arr @ other_tensor.arr, op_name='mat')
+        matmul_tensor.add_parent(self, other_tensor)
+        self.add_child(matmul_tensor)
+        other_tensor.add_child(matmul_tensor)
+
+        def _prop_tan(): matmul_tensor._tangent = self._tangent*other_tensor.arr + self.arr*other_tensor._tangent
+        matmul_tensor._prop_tan = _prop_tan
+        def _prop_val(): matmul_tensor.arr = self.arr / other_tensor.arr
+        matmul_tensor._prop_val = _prop_val
+        return matmul_tensor
 
     def check_shape(self) -> tuple:
         self.shape = self.arr.check_shape()
@@ -624,6 +667,51 @@ def identity(shape: int) -> float | array:
 
 def sign(v: Number) -> float:
     return 1.0 if v > 0 else -1.0 if v < 0 else 0.0
+
+
+def depth(v: list | Number) -> int:
+    """
+    This function does not validate whether the input is homogeneous.
+    If the input contains an empty list, an IndexError might be thrown.
+    """
+    cnt = 0
+    while isinstance(v, list):
+        v = v[0]
+        cnt += 1
+    return cnt
+
+
+def binary_elementwise(x1: list | Number, x2: list | Number, op) -> list | float:
+    """
+    This function does not validate whether the inputs are homogeneous or broadcastable.
+    Incompatible shapes may produce unexpected output.
+    """
+    x1 = x1 if isinstance(x1, list) else [x1]
+    x2 = x2 if isinstance(x2, list) else [x2]
+
+    if isinstance(x1[0], list): return [binary_elementwise(x1_i, x2, op) for x1_i in x1]
+    elif isinstance(x2[0], list): return [binary_elementwise(x1, x2_i, op) for x2_i in x2]
+    else: return [op(x1[min(i, len(x1)-1)], x2[min(i, len(x2)-1)]) for i in range(max(len(x1), len(x2)))]
+
+
+def matmul(x1: list, x2:list) -> list:
+    if depth(x1) > 2: return [matmul(x1_i, x2) for x1_i in x1]
+    elif depth(x2) > 2: return [matmul(x1, x2_i) for x2_i in x2]
+    else :
+        x1 = x1 if isinstance(x1[0], list) else [x1]
+        x2 = x2 if isinstance(x2[0], list) else [x2]
+        return [sum([binary_elementwise(row, [x2_row[m] for x2_row in x2], operator.mul) for m in range(len(x2[0]))]) for row in x1]
+        # res = []
+        # for row in x1:
+        #     temp = []
+        #     for m in range(len(x2[0])):
+        #         # col_m = [row_k[m] for row_k in x2]
+        #         col_m = []
+        #         for row_k in x2:
+        #             col_m.append(row_k[m])
+        #         temp += (binary_elementwise(row, col_m, operator.mul))
+        #     res.append(sum(temp))
+        # return res
 
 
 def jvp(f: tensor, inputs: None | dict[tensor, array], directions: dict[tensor, array]):
