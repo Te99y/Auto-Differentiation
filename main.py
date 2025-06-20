@@ -1,3 +1,5 @@
+import operator
+
 import AutoDiff as ad
 import numpy as np
 
@@ -23,6 +25,11 @@ if __name__ == '__main__':
 
     print(t1.abs())
     print(t2.abs())
+    # print(b @ a)
+
+    c = ad.array([1, 2, 3], outer_shape=(3, 2, 1))
+    # print(ad.depth(0))
+    print(ad.matmul([[1], [4]], [[1, 1]]))
 
     # y = ((t1 - t2).exp() - t3.abs().log()) + 2*t3
     # y = ((t1 - t2).log()).neg().abs()
