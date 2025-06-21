@@ -27,9 +27,14 @@ if __name__ == '__main__':
     print(t2.abs())
     # print(b @ a)
 
-    c = ad.array([1, 2, 3], outer_shape=(3, 2, 1))
+    c = ad.array([[5, 0], [3, 1]], outer_shape=(2, 2, ))
+    d = ad.array([[3, 20], [-3, -2]] )
+    print(c)
+    print(d)
     # print(ad.depth(0))
-    print(ad.matmul([[1], [4]], [[1, 1]]))
+    print(c @ d)
+
+    print(np.array(c.value) @ np.array(d.value))
 
     # y = ((t1 - t2).exp() - t3.abs().log()) + 2*t3
     # y = ((t1 - t2).log()).neg().abs()
