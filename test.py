@@ -9,7 +9,12 @@ import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)  # to match python-native float64
 OPS = {
     'unary': [operator.abs, operator.neg, math.exp, math.log, math.sin, math.cos],
-    'binary': [operator.add, operator.sub, operator.mul, operator.truediv]
+    'binary': [
+        operator.add,
+        operator.sub,
+        operator.mul,
+        operator.truediv
+    ]
 }
 np.random.seed(seed=20250614)
 ITER = 10
@@ -104,7 +109,7 @@ cov.start()
 #     def test_ops(self):
 #         for _ in range(ITER):
 #             l = np.random.randint(low=1, high=6)
-#             size = np.random.randint(low=1, high=20, size=l)
+#             size = np.random.randint(low=2, high=20, size=l)
 #             a = np.random.uniform(low=-500, high=500, size=size)
 #             random_drop_size = size[np.random.randint(low=0, high=l):]
 #             ones_mask = np.random.rand(*random_drop_size.shape) < 0.5
@@ -112,8 +117,6 @@ cov.start()
 #             b = np.random.uniform(low=0.001, high=500, size=random_drop_size)
 #             _a = ad.array(a.tolist())
 #             _b = ad.array(b.tolist())
-#             # Binary ops
-#             self.assertTrue(all(op(a, b).tolist() == op(_a, _b).value for op in OPS['binary']))
 #             # Test for unary ops needs class specific functions
 #             self.assertEqual(np.abs(a).tolist(), _a.abs().value)
 #             self.assertEqual(np.negative(a).tolist(), _a.neg().value)
@@ -121,6 +124,16 @@ cov.start()
 #             self.assertEqual(np.log(b).tolist(), _b.log().value)
 #             self.assertEqual(np.sin(a).tolist(), _a.sin().value)
 #             self.assertEqual(np.cos(a).tolist(), _a.cos().value)
+#             # Binary ops
+#             self.assertTrue(all(op(a, b).tolist() == op(_a, _b).value for op in OPS['binary']))
+#             # Matmul
+#             [n, k, m] = np.random.randint(low=1, high=5, size=3)
+#             mat1 = ad.array(np.random.rand(*size[0:4], n, k).tolist())
+#             mat2 = ad.array(np.random.rand(*size[0:4], k, m).tolist())
+#             np_matmul = np.array(mat1.value, dtype=np.float64) @ np.array(mat2.value, dtype=np.float64)
+#             ad_matmul = mat1 @ mat2
+#             self.assertEqual(np.array(np_matmul, dtype=np.float32).tolist(),
+#                              np.array(ad_matmul.value, dtype=np.float32).tolist())
 
 
 class test_tensor(unittest.TestCase):
@@ -182,8 +195,6 @@ class test_tensor(unittest.TestCase):
     #         b = np.random.uniform(low=0.001, high=500, size=random_drop_size)
     #         _a = ad.tensor(ad.array(a.tolist()))
     #         _b = ad.tensor(ad.array(b.tolist()))
-    #         # Binary ops
-    #         self.assertTrue(all(op(a, b).tolist() == op(_a, _b).arr.value for op in OPS['binary']))
     #         # Test for unary ops needs class specific functions
     #         self.assertEqual(np.abs(a).tolist(), _a.abs().arr.value)
     #         self.assertEqual(np.negative(a).tolist(), _a.neg().arr.value)
@@ -191,6 +202,17 @@ class test_tensor(unittest.TestCase):
     #         self.assertEqual(np.log(b).tolist(), _b.log().arr.value)
     #         self.assertEqual(np.sin(a).tolist(), _a.sin().arr.value)
     #         self.assertEqual(np.cos(a).tolist(), _a.cos().arr.value)
+    #         # Binary ops
+    #         self.assertTrue(all(op(a, b).tolist() == op(_a, _b).arr.value for op in OPS['binary']))
+    #         # Matmul
+    #         [n, k, m] = np.random.randint(low=1, high=5, size=3)
+    #         mat1 = ad.tensor(np.random.rand(*size[0:4], n, k).tolist())
+    #         mat2 = ad.tensor(np.random.rand(*size[0:4], k, m).tolist())
+    #         np_matmul = np.array(mat1.arr.value, dtype=np.float64) @ np.array(mat2.arr.value, dtype=np.float64)
+    #         ad_matmul = mat1 @ mat2
+    #         self.assertEqual(np.array(np_matmul, dtype=np.float32).tolist(),
+    #                          np.array(ad_matmul.arr.value, dtype=np.float32).tolist())
+
 
     def test_differentiation(self):
         input_dim = 20
@@ -249,7 +271,7 @@ class test_tensor(unittest.TestCase):
         directions = {root: seed.tolist() for root, seed in zip(root_tensors, v)}
         tensor_tangents = [ad.jvp(y, None, directions).value for y in ys]
         self.assertEqual(np.array(jax_tangents, dtype=np.float32).tolist(), np.array(tensor_tangents, dtype=np.float32).tolist())
-    
+
 
 cov.stop()
 cov.save()
