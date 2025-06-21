@@ -234,50 +234,50 @@ class array:
         return f'shape:{self.shape}, value:{self.value}'
 
     def __add__(self, other: Number | ListLike) -> array:
-        other_arr = array(other)
+        other_arr = other if isinstance(other, array) else array(other)
         return self.elementwise(operator.add, other_arr)
 
     def __radd__(self, other: Number | ListLike) -> array:
         return self + other
 
     def __iadd__(self, other: Number | ListLike) -> array:
-        other_arr = array(other)
+        other_arr = other if isinstance(other, array) else array(other)
         return self.elementwise(operator.add, other_arr, inplace=True)
 
     def __sub__(self, other: Number | ListLike) -> array:
-        other_arr = array(other)
+        other_arr = other if isinstance(other, array) else array(other)
         return self.elementwise(operator.sub, other_arr)
 
     def __rsub__(self, other: Number | ListLike) -> array:
-        other_arr = array(other)
+        other_arr = other if isinstance(other, array) else array(other)
         return other_arr - self
 
     def __isub__(self, other: Number | ListLike) -> array:
-        other_arr = array(other)
+        other_arr = other if isinstance(other, array) else array(other)
         return self.elementwise(operator.sub, other_arr, inplace=True)
 
     def __mul__(self, other: Number | ListLike) -> array:
-        other_arr = array(other)
+        other_arr = other if isinstance(other, array) else array(other)
         return self.elementwise(operator.mul, other_arr)
 
     def __rmul__(self, other: Number | ListLike) -> array:
-        other_arr = array(other)
+        other_arr = other if isinstance(other, array) else array(other)
         return other_arr * self
 
     def __imul__(self, other: Number | ListLike) -> array:
-        other_arr = array(other)
+        other_arr = other if isinstance(other, array) else array(other)
         return self.elementwise(operator.mul, other_arr, inplace=True)
 
     def __truediv__(self, other: Number | ListLike) -> array:
-        other_arr = array(other)
+        other_arr = other if isinstance(other, array) else array(other)
         return self.elementwise(operator.truediv, other_arr)
 
     def __rtruediv__(self, other: Number | ListLike) -> array:
-        other_arr = array(other)
+        other_arr = other if isinstance(other, array) else array(other)
         return other_arr / self
 
     def __itruediv__(self, other: Number | ListLike) -> array:
-        other_arr = array(other)
+        other_arr = other if isinstance(other, array) else array(other)
         return self.elementwise(operator.truediv, other_arr, inplace=True)
 
     def __neg__(self) -> array:
@@ -297,7 +297,7 @@ class array:
         return self.elementwise(operator.pow, power, inplace=True)
 
     def __matmul__(self, other) -> array:
-        other_arr = array(other)
+        other_arr = other if isinstance(other, array) else array(other)
         if self.shape[-1] != other_arr.shape[-2]:
             raise ValueError(f'The last dim of {self.shape} does not equal the second to last dim '
                              f'of the {other_arr.shape}. Refer to the signature (...,n,k),(...,k,m)->(...,n,m).')
@@ -306,6 +306,28 @@ class array:
             if dim1 != dim2 and dim1 != 0 and dim2 != 0:
                 raise ValueError(f'Cannot broadcast between {self.shape} and {other_arr.shape}.')
 
+        result_array = array(0)
+        result_array.value = matmul(self.value, other.value)
+        result_array.check_shape()
+        return result_array
+    
+    def __rmatmul__(self, other):
+        other_arr = other if isinstance(other, array) else array(other)
+        return other_arr @ self
+    
+    def __imatmul__(self, other) -> array:
+        other_arr = other if isinstance(other, array) else array(other)
+        if self.shape[-1] != other_arr.shape[-2]:
+            raise ValueError(f'The last dim of {self.shape} does not equal the second to last dim '
+                             f'of the {other_arr.shape}. Refer to the signature (...,n,k),(...,k,m)->(...,n,m).')
+
+        for dim1, dim2 in zip(reversed(self.shape[2:]), reversed(other_arr.shape[2:])):
+            if dim1 != dim2 and dim1 != 0 and dim2 != 0:
+                raise ValueError(f'Cannot broadcast between {self.shape} and {other_arr.shape}.')
+
+        self.value = matmul(self.value, other.value)
+        self.check_shape()
+        return self
 
 
 
@@ -524,7 +546,7 @@ class tensor:
         other_tensor = other if isinstance(other, tensor) else tensor(other)
         # self.arr /= other_tensor.arr
         return self / other_tensor
-    
+
     def __matmul__(self, other) -> tensor:
         other_tensor = other if isinstance(other, tensor) else tensor.const_tensor(other)
         matmul_tensor = tensor.intermediate_tensor(self.arr @ other_tensor.arr, op_name='mat')
@@ -694,24 +716,31 @@ def binary_elementwise(x1: list | Number, x2: list | Number, op) -> list | float
     else: return [op(x1[min(i, len(x1)-1)], x2[min(i, len(x2)-1)]) for i in range(max(len(x1), len(x2)))]
 
 
-def matmul(x1: list, x2:list) -> list:
+def matmul(x1: list, x2: list) -> list:
+    """
+    This function does not validate whether the inputs are homogeneous or broadcastable.
+    Incompatible shapes may produce unexpected output.\n
+
+    This is essentially elementwise, if we think of the last 2-dim matrices as elements
+    of a list with shape (batch_dim, ).
+    """
+    x1 = x1 if isinstance(x1[0], list) else [x1]
+    x2 = x2 if isinstance(x2[0], list) else [x2]
+
     if depth(x1) > 2: return [matmul(x1_i, x2) for x1_i in x1]
     elif depth(x2) > 2: return [matmul(x1, x2_i) for x2_i in x2]
-    else :
-        x1 = x1 if isinstance(x1[0], list) else [x1]
-        x2 = x2 if isinstance(x2[0], list) else [x2]
-        return [sum([binary_elementwise(row, [x2_row[m] for x2_row in x2], operator.mul) for m in range(len(x2[0]))]) for row in x1]
-        # res = []
-        # for row in x1:
-        #     temp = []
-        #     for m in range(len(x2[0])):
-        #         # col_m = [row_k[m] for row_k in x2]
-        #         col_m = []
-        #         for row_k in x2:
-        #             col_m.append(row_k[m])
-        #         temp += (binary_elementwise(row, col_m, operator.mul))
-        #     res.append(sum(temp))
-        # return res
+    else: return [[sum(binary_elementwise(row, [x2_row[m] for x2_row in x2], operator.mul)) for m in range(len(x2[0]))] for row in x1]
+    # res = []
+    # for row in x1:
+    #     temp = []
+    #     for m in range(len(x2[0])):
+    #         # col_m = [row_k[m] for row_k in x2]
+    #         col_m = []
+    #         for row_k in x2:
+    #             col_m.append(row_k[m])
+    #         temp.append(sum(binary_elementwise(row, col_m, operator.mul)))
+    #     res.append(temp)
+    # return res
 
 
 def jvp(f: tensor, inputs: None | dict[tensor, array], directions: dict[tensor, array]):
