@@ -2,10 +2,7 @@ from __future__ import annotations
 import math
 import operator
 from typing import Union
-# from enum import IntEnum, auto
 from copy import deepcopy
-
-import AutoDiff
 
 TENSOR_MAP = []
 Number = Union[int | float]
@@ -310,7 +307,7 @@ class array:
                 raise ValueError(f'Cannot broadcast between {self.shape} and {other_arr.shape}.')
 
         result_array = array(0)
-        result_array.value = matmul(self.value, other.value)
+        result_array.value = _matmul(self.value, other.value)
         result_array.check_shape()
         return result_array
     
@@ -328,7 +325,7 @@ class array:
             if dim1 != dim2 and dim1 != 0 and dim2 != 0:
                 raise ValueError(f'Cannot broadcast between {self.shape} and {other_arr.shape}.')
 
-        self.value = matmul(self.value, other.value)
+        self.value = _matmul(self.value, other.value)
         self.check_shape()
         return self
 
@@ -714,7 +711,20 @@ def binary_elementwise(x1: list, x2: list, op) -> list:
     return [binary_elementwise(x1, x2_i, op) for x2_i in x2]
 
 
-def matmul(x1: list, x2: list) -> list:
+def matmul(v1: ListLike, v2: ListLike):
+    """
+    This is a wrapper function
+    """
+    if isinstance(v1, list) and isinstance(v2, list):
+        return _matmul(v1, v2)
+    if isinstance(v1, array) and isinstance(v2, array):
+        return v1 @ v2
+    if isinstance(v1, tensor) and isinstance(v2, tensor):
+        return v1 @ v2
+    raise ValueError(f'Input types do not match. Got {type(v1)}, {type(v2)}')
+
+
+def _matmul(x1: list, x2: list) -> list:
     """
     This function does not validate whether the inputs are homogeneous or broadcastable.
     Incompatible shapes may produce unexpected output.\n
@@ -727,9 +737,9 @@ def matmul(x1: list, x2: list) -> list:
         x1 = x1 if isinstance(x1[0], list) else [x1]
         x2 = x2 if isinstance(x2[0], list) else [x2]
         return [[sum(binary_elementwise(row, [x2_row[m] for x2_row in x2], operator.mul)) for m in range(len(x2[0]))] for row in x1]
-    if d1 == d2: return [matmul(x1[min(i, len(x1)-1)], x2[min(i, len(x2)-1)]) for i in range(max(len(x1), len(x2)))]
-    if d1 > d2: return [matmul(x1_i, x2) for x1_i in x1]
-    return [matmul(x1, x2_i) for x2_i in x2]
+    if d1 == d2: return [_matmul(x1[min(i, len(x1)-1)], x2[min(i, len(x2)-1)]) for i in range(max(len(x1), len(x2)))]
+    if d1 > d2: return [_matmul(x1_i, x2) for x1_i in x1]
+    return [_matmul(x1, x2_i) for x2_i in x2]
 
 
 def jvp(f: tensor, inputs: None | dict[tensor, array], directions: dict[tensor, array]):
