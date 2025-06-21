@@ -554,20 +554,20 @@ class tensor:
 
         def _prop_tan(): matmul_tensor._tangent = self._tangent*other_tensor.arr + self.arr*other_tensor._tangent
         matmul_tensor._prop_tan = _prop_tan
-        def _prop_val(): matmul_tensor.arr = self.arr / other_tensor.arr
+        def _prop_val(): matmul_tensor.arr = self.arr @ other_tensor.arr
         matmul_tensor._prop_val = _prop_val
         return matmul_tensor
 
     def __rmatmul__(self, other) -> tensor:
         other_tensor = other if isinstance(other, tensor) else tensor.const_tensor(other)
-        matmul_tensor = tensor.intermediate_tensor(self.arr @ other_tensor.arr, op_name='mat')
+        matmul_tensor = tensor.intermediate_tensor(other_tensor.arr @ self.arr, op_name='mat')
         matmul_tensor.add_parent(self, other_tensor)
         self.add_child(matmul_tensor)
         other_tensor.add_child(matmul_tensor)
 
         def _prop_tan(): matmul_tensor._tangent = self._tangent*other_tensor.arr + self.arr*other_tensor._tangent
         matmul_tensor._prop_tan = _prop_tan
-        def _prop_val(): matmul_tensor.arr = self.arr / other_tensor.arr
+        def _prop_val(): matmul_tensor.arr = other_tensor.arr @ self.arr
         matmul_tensor._prop_val = _prop_val
         return matmul_tensor
 
@@ -722,23 +722,14 @@ def matmul(x1: list, x2: list) -> list:
     This is essentially elementwise, if we think of the last 2-dim matrices as elements
     of a list with shape (batch_dim, ).
     """
-    x1 = x1 if isinstance(x1[0], list) else [x1]
-    x2 = x2 if isinstance(x2[0], list) else [x2]
-
-    if depth(x1) > 2: return [matmul(x1_i, x2) for x1_i in x1]
-    elif depth(x2) > 2: return [matmul(x1, x2_i) for x2_i in x2]
-    else: return [[sum(binary_elementwise(row, [x2_row[m] for x2_row in x2], operator.mul)) for m in range(len(x2[0]))] for row in x1]
-    # res = []
-    # for row in x1:
-    #     temp = []
-    #     for m in range(len(x2[0])):
-    #         # col_m = [row_k[m] for row_k in x2]
-    #         col_m = []
-    #         for row_k in x2:
-    #             col_m.append(row_k[m])
-    #         temp.append(sum(binary_elementwise(row, col_m, operator.mul)))
-    #     res.append(temp)
-    # return res
+    d1, d2 = depth(x1), depth(x2)
+    if d1 <= 2 and d2 <= 2:
+        x1 = x1 if isinstance(x1[0], list) else [x1]
+        x2 = x2 if isinstance(x2[0], list) else [x2]
+        return [[sum(binary_elementwise(row, [x2_row[m] for x2_row in x2], operator.mul)) for m in range(len(x2[0]))] for row in x1]
+    if d1 == d2: return [matmul(x1[min(i, len(x1)-1)], x2[min(i, len(x2)-1)]) for i in range(max(len(x1), len(x2)))]
+    if d1 > d2: return [matmul(x1_i, x2) for x1_i in x1]
+    return [matmul(x1, x2_i) for x2_i in x2]
 
 
 def jvp(f: tensor, inputs: None | dict[tensor, array], directions: dict[tensor, array]):
