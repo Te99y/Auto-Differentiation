@@ -63,7 +63,6 @@ class array:
                 self.shape = (1,)
                 self.value = [init_value]
         else:
-            print()
             print(type(init_value))
             print(init_value)
             raise ValueError('How did you even get here?')
@@ -119,14 +118,18 @@ class array:
         if not other:
             return self._elementwise_unary(op)
 
-        def _ew(x1, x2):
-            if isinstance(x1[0], list): return [_ew(x1_i, x2) for x1_i in x1]
-            elif isinstance(x2[0], list): return [_ew(x1, x2_i) for x2_i in x2]
-            else: return [op(x1[min(i, len(x1)-1)], x2[min(i, len(x2)-1)]) for i in range(max(len(x1), len(x2)))]
-
+        # def _ew(x1, x2):
+        #     if isinstance(x1[0], list): return [_ew(x1_i, x2) for x1_i in x1]
+        #     elif isinstance(x2[0], list): return [_ew(x1, x2_i) for x2_i in x2]
+        #     else: return [op(x1[min(i, len(x1)-1)], x2[min(i, len(x2)-1)]) for i in range(max(len(x1), len(x2)))]
+        #
+        # result_array = self if inplace else array(0)
+        # result_array.value = _ew(self.value, other.value)
+        # result_array.shape = self.broadcast_with(other)
         result_array = self if inplace else array(0)
-        result_array.value = _ew(self.value, other.value)
+        result_array.value = binary_elementwise(self.value, other.value, op)
         result_array.shape = self.broadcast_with(other)
+
         return result_array
 
     # ==============================================================================================================
@@ -302,7 +305,7 @@ class array:
             raise ValueError(f'The last dim of {self.shape} does not equal the second to last dim '
                              f'of the {other_arr.shape}. Refer to the signature (...,n,k),(...,k,m)->(...,n,m).')
 
-        for dim1, dim2 in zip(reversed(self.shape[2:]), reversed(other_arr.shape[2:])):
+        for dim1, dim2 in zip(reversed(self.shape[:-2]), reversed(other_arr.shape[:-2])):
             if dim1 != dim2 and dim1 != 0 and dim2 != 0:
                 raise ValueError(f'Cannot broadcast between {self.shape} and {other_arr.shape}.')
 
@@ -328,11 +331,6 @@ class array:
         self.value = matmul(self.value, other.value)
         self.check_shape()
         return self
-
-
-
-
-
 
     def abs(self) -> array:
         return self.__abs__()
@@ -703,17 +701,17 @@ def depth(v: list | Number) -> int:
     return cnt
 
 
-def binary_elementwise(x1: list | Number, x2: list | Number, op) -> list | float:
+def binary_elementwise(x1: list, x2: list, op) -> list:
     """
     This function does not validate whether the inputs are homogeneous or broadcastable.
     Incompatible shapes may produce unexpected output.
     """
-    x1 = x1 if isinstance(x1, list) else [x1]
-    x2 = x2 if isinstance(x2, list) else [x2]
-
-    if isinstance(x1[0], list): return [binary_elementwise(x1_i, x2, op) for x1_i in x1]
-    elif isinstance(x2[0], list): return [binary_elementwise(x1, x2_i, op) for x2_i in x2]
-    else: return [op(x1[min(i, len(x1)-1)], x2[min(i, len(x2)-1)]) for i in range(max(len(x1), len(x2)))]
+    if isinstance(x1[0], Number) and isinstance(x2[0], Number):
+        return [op(x1[min(i, len(x1)-1)], x2[min(i, len(x2)-1)]) for i in range(max(len(x1), len(x2)))]
+    d1, d2 = depth(x1), depth(x2)
+    if d1 == d2: return [binary_elementwise(x1[min(i, len(x1)-1)], x2[min(i, len(x2)-1)], op) for i in range(max(len(x1), len(x2)))]
+    if d1 > d2: return [binary_elementwise(x1_i, x2, op) for x1_i in x1]
+    return [binary_elementwise(x1, x2_i, op) for x2_i in x2]
 
 
 def matmul(x1: list, x2: list) -> list:
