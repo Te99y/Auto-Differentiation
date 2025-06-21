@@ -31,7 +31,7 @@ jnp_binary = [
     jnp.add,
     jnp.subtract,
     jnp.multiply,
-    jnp.true_divide
+    jnp.true_divide,
 ]
 jnp_to_tensor_map = {
     jnp.negative:    ad.neg,
@@ -45,6 +45,7 @@ jnp_to_tensor_map = {
     jnp.subtract:    ad.sub,
     jnp.multiply:    ad.mul,
     jnp.true_divide: ad.div,
+    jnp.matmul:      ad.matmul
 }
 
 
@@ -52,174 +53,171 @@ cov = coverage.Coverage()
 cov.start()
 
 
-# class test_array(unittest.TestCase):
-#     def test_init(self):
-#         a = ad.array(0.0)
-#         self.assertEqual(a.value, [0.0])
-#         self.assertEqual(a.shape, (1, ))
-#         a = ad.array(0)
-#         self.assertEqual(a.value, [0])
-#         self.assertEqual(a.shape, (1, ))
-#         a = ad.array([0])
-#         self.assertEqual(a.value, [0])
-#         self.assertEqual(a.shape, (1, ))
-#
-#         a = ad.array([0, 1, 2.0, -9])
-#         self.assertEqual(a.value, [0, 1, 2.0, -9])
-#         self.assertEqual(a.shape, (4, ))
-#         a = ad.array([0, 1, 2.0, -9], outer_shape=())
-#         self.assertEqual(a.value, [0, 1, 2.0, -9])
-#         self.assertEqual(a.shape, (4, ))
-#
-#         a = ad.array(2.1, outer_shape=(2, 2, 4))
-#         self.assertEqual(a.value, [
-#             [[2.1, 2.1, 2.1, 2.1], [2.1, 2.1, 2.1, 2.1]],
-#             [[2.1, 2.1, 2.1, 2.1], [2.1, 2.1, 2.1, 2.1]]
-#         ])
-#         self.assertEqual(a.shape, (2, 2, 4))
-#         a = ad.array([2.1], outer_shape=(2, 2, 4))
-#         self.assertEqual(a.value, [
-#             [[[2.1], [2.1], [2.1], [2.1]], [[2.1], [2.1], [2.1], [2.1]]],
-#             [[[2.1], [2.1], [2.1], [2.1]], [[2.1], [2.1], [2.1], [2.1]]]
-#         ])
-#         self.assertEqual(a.shape, (2, 2, 4, 1))
-#
-#         b = ad.array(a)
-#         self.assertEqual(a.value, b.value)
-#         self.assertEqual(a.shape, b.shape)
-#
-#
-#     def test_flatten(self):
-#         a = np.random.randn(2, 3, 4, 1, 6)
-#         _a = ad.array(a.tolist())
-#         self.assertEqual(a.flatten().tolist(), _a.flatten())
-#
-#     def test_check_shape(self):
-#         shape = np.random.randint(low=1, high=5, size=5)
-#         a = np.random.randn(*shape)
-#         _a = ad.array(a.tolist())
-#         self.assertEqual(tuple(shape), _a.check_shape())
-#
-#     def test_broadcast(self):
-#         shape = np.random.randint(low=1, high=5, size=5)
-#         a = np.random.randn(*shape)
-#         _a = ad.array(a.tolist())
-#         self.assertEqual(tuple(shape), _a.check_shape())
-#
-#     def test_ops(self):
-#         for _ in range(ITER):
-#             l = np.random.randint(low=1, high=6)
-#             size = np.random.randint(low=2, high=20, size=l)
-#             a = np.random.uniform(low=-500, high=500, size=size)
-#             random_drop_size = size[np.random.randint(low=0, high=l):]
-#             ones_mask = np.random.rand(*random_drop_size.shape) < 0.5
-#             random_drop_size[ones_mask] = 1
-#             b = np.random.uniform(low=0.001, high=500, size=random_drop_size)
-#             _a = ad.array(a.tolist())
-#             _b = ad.array(b.tolist())
-#             # Test for unary ops needs class specific functions
-#             self.assertEqual(np.abs(a).tolist(), _a.abs().value)
-#             self.assertEqual(np.negative(a).tolist(), _a.neg().value)
-#             self.assertEqual(np.exp(a).tolist(), _a.exp().value)
-#             self.assertEqual(np.log(b).tolist(), _b.log().value)
-#             self.assertEqual(np.sin(a).tolist(), _a.sin().value)
-#             self.assertEqual(np.cos(a).tolist(), _a.cos().value)
-#             # Binary ops
-#             self.assertTrue(all(op(a, b).tolist() == op(_a, _b).value for op in OPS['binary']))
-#             # Matmul
-#             [n, k, m] = np.random.randint(low=1, high=5, size=3)
-#             mat1 = ad.array(np.random.rand(*size[0:4], n, k).tolist())
-#             mat2 = ad.array(np.random.rand(*size[0:4], k, m).tolist())
-#             np_matmul = np.array(mat1.value, dtype=np.float64) @ np.array(mat2.value, dtype=np.float64)
-#             ad_matmul = mat1 @ mat2
-#             self.assertEqual(np.array(np_matmul, dtype=np.float32).tolist(),
-#                              np.array(ad_matmul.value, dtype=np.float32).tolist())
+class test_array(unittest.TestCase):
+    def test_init(self):
+        a = ad.array(0.0)
+        self.assertEqual(a.value, [0.0])
+        self.assertEqual(a.shape, (1, ))
+        a = ad.array(0)
+        self.assertEqual(a.value, [0])
+        self.assertEqual(a.shape, (1, ))
+        a = ad.array([0])
+        self.assertEqual(a.value, [0])
+        self.assertEqual(a.shape, (1, ))
+
+        a = ad.array([0, 1, 2.0, -9])
+        self.assertEqual(a.value, [0, 1, 2.0, -9])
+        self.assertEqual(a.shape, (4, ))
+        a = ad.array([0, 1, 2.0, -9], outer_shape=())
+        self.assertEqual(a.value, [0, 1, 2.0, -9])
+        self.assertEqual(a.shape, (4, ))
+
+        a = ad.array(2.1, outer_shape=(2, 2, 4))
+        self.assertEqual(a.value, [
+            [[2.1, 2.1, 2.1, 2.1], [2.1, 2.1, 2.1, 2.1]],
+            [[2.1, 2.1, 2.1, 2.1], [2.1, 2.1, 2.1, 2.1]]
+        ])
+        self.assertEqual(a.shape, (2, 2, 4))
+        a = ad.array([2.1], outer_shape=(2, 2, 4))
+        self.assertEqual(a.value, [
+            [[[2.1], [2.1], [2.1], [2.1]], [[2.1], [2.1], [2.1], [2.1]]],
+            [[[2.1], [2.1], [2.1], [2.1]], [[2.1], [2.1], [2.1], [2.1]]]
+        ])
+        self.assertEqual(a.shape, (2, 2, 4, 1))
+
+        b = ad.array(a)
+        self.assertEqual(a.value, b.value)
+        self.assertEqual(a.shape, b.shape)
+
+
+    def test_flatten(self):
+        a = np.random.randn(2, 3, 4, 1, 6)
+        _a = ad.array(a.tolist())
+        self.assertEqual(a.flatten().tolist(), _a.flatten())
+
+    def test_check_shape(self):
+        shape = np.random.randint(low=1, high=5, size=5)
+        a = np.random.randn(*shape)
+        _a = ad.array(a.tolist())
+        self.assertEqual(tuple(shape), _a.check_shape())
+
+    def test_broadcast(self):
+        shape = np.random.randint(low=1, high=5, size=5)
+        a = np.random.randn(*shape)
+        _a = ad.array(a.tolist())
+        self.assertEqual(tuple(shape), _a.check_shape())
+
+    def test_ops(self):
+        for _ in range(ITER):
+            l = np.random.randint(low=1, high=6)
+            size = np.random.randint(low=2, high=20, size=l)
+            a = np.random.uniform(low=-500, high=500, size=size)
+            random_drop_size = size[np.random.randint(low=0, high=l):]
+            ones_mask = np.random.rand(*random_drop_size.shape) < 0.5
+            random_drop_size[ones_mask] = 1
+            b = np.random.uniform(low=0.001, high=500, size=random_drop_size)
+            _a = ad.array(a.tolist())
+            _b = ad.array(b.tolist())
+            # Test for unary ops needs class specific functions
+            self.assertEqual(np.abs(a).tolist(), _a.abs().value)
+            self.assertEqual(np.negative(a).tolist(), _a.neg().value)
+            self.assertEqual(np.exp(a).tolist(), _a.exp().value)
+            self.assertEqual(np.log(b).tolist(), _b.log().value)
+            self.assertEqual(np.sin(a).tolist(), _a.sin().value)
+            self.assertEqual(np.cos(a).tolist(), _a.cos().value)
+            # Binary ops
+            self.assertTrue(all(op(a, b).tolist() == op(_a, _b).value for op in OPS['binary']))
+            # Matmul
+            [n, k, m] = np.random.randint(low=1, high=5, size=3)
+            mat1 = ad.array(np.random.rand(*size[0:4], n, k).tolist())
+            mat2 = ad.array(np.random.rand(*size[0:4], k, m).tolist())
+            np_matmul = np.array(mat1.value, dtype=np.float64) @ np.array(mat2.value, dtype=np.float64)
+            ad_matmul = mat1 @ mat2
+            self.assertEqual(np.array(np_matmul, dtype=np.float32).tolist(),
+                             np.array(ad_matmul.value, dtype=np.float32).tolist())
 
 
 class test_tensor(unittest.TestCase):
     def setUp(self) -> None:
         ad.TENSOR_MAP.clear()
 
-    # def test_init(self):
-    #     a = ad.array(0.0)
-    #     b = ad.tensor(a)
-    #     self.assertEqual(b.arr.value, [0.0])
-    #     self.assertEqual(b.shape, (1, ))
-    #     a = ad.array(0)
-    #     b = ad.tensor(a)
-    #     self.assertEqual(b.arr.value, [0])
-    #     self.assertEqual(b.shape, (1, ))
-    #     a = ad.array([0])
-    #     b = ad.tensor(a)
-    #     self.assertEqual(b.arr.value, [0])
-    #     self.assertEqual(b.shape, (1, ))
-    #
-    #     a = ad.array([0, 1, 2.0, -9])
-    #     b = ad.tensor(a)
-    #     self.assertEqual(b.arr.value, [0, 1, 2.0, -9])
-    #     self.assertEqual(b.shape, (4, ))
-    #     a = ad.array([0, 1, 2.0, -9], outer_shape=())
-    #     b = ad.tensor(a)
-    #     self.assertEqual(b.arr.value, [0, 1, 2.0, -9])
-    #     self.assertEqual(b.shape, (4, ))
-    #
-    #     a = ad.array(2.1, outer_shape=(2, 2, 4))
-    #     b = ad.tensor(a)
-    #     self.assertEqual(b.arr.value, [
-    #         [[2.1, 2.1, 2.1, 2.1], [2.1, 2.1, 2.1, 2.1]],
-    #         [[2.1, 2.1, 2.1, 2.1], [2.1, 2.1, 2.1, 2.1]]
-    #     ])
-    #     self.assertEqual(b.shape, (2, 2, 4))
-    #     a = ad.array([2.1], outer_shape=(2, 2, 4))
-    #     b = ad.tensor(a)
-    #     self.assertEqual(b.arr.value, [
-    #         [[[2.1], [2.1], [2.1], [2.1]], [[2.1], [2.1], [2.1], [2.1]]],
-    #         [[[2.1], [2.1], [2.1], [2.1]], [[2.1], [2.1], [2.1], [2.1]]]
-    #     ])
-    #     self.assertEqual(b.shape, (2, 2, 4, 1))
-    #
-    #     b = ad.array(a)
-    #     c = ad.tensor(b)
-    #     self.assertEqual(b.value, c.arr.value)
-    #     self.assertEqual(b.shape, c.shape)
-    #
-    # def test_op(self):
-    #     for _ in range(ITER):
-    #         l = np.random.randint(low=1, high=6)
-    #         size = np.random.randint(low=1, high=20, size=l)
-    #         random_drop_size = size[np.random.randint(low=0, high=l):]
-    #         ones_mask = np.random.rand(*random_drop_size.shape) < 0.5
-    #         random_drop_size[ones_mask] = 1
-    #
-    #         a = np.random.uniform(low=-500, high=500, size=size)
-    #         b = np.random.uniform(low=0.001, high=500, size=random_drop_size)
-    #         _a = ad.tensor(ad.array(a.tolist()))
-    #         _b = ad.tensor(ad.array(b.tolist()))
-    #         # Test for unary ops needs class specific functions
-    #         self.assertEqual(np.abs(a).tolist(), _a.abs().arr.value)
-    #         self.assertEqual(np.negative(a).tolist(), _a.neg().arr.value)
-    #         self.assertEqual(np.exp(a).tolist(), _a.exp().arr.value)
-    #         self.assertEqual(np.log(b).tolist(), _b.log().arr.value)
-    #         self.assertEqual(np.sin(a).tolist(), _a.sin().arr.value)
-    #         self.assertEqual(np.cos(a).tolist(), _a.cos().arr.value)
-    #         # Binary ops
-    #         self.assertTrue(all(op(a, b).tolist() == op(_a, _b).arr.value for op in OPS['binary']))
-    #         # Matmul
-    #         [n, k, m] = np.random.randint(low=1, high=5, size=3)
-    #         mat1 = ad.tensor(np.random.rand(*size[0:4], n, k).tolist())
-    #         mat2 = ad.tensor(np.random.rand(*size[0:4], k, m).tolist())
-    #         np_matmul = np.array(mat1.arr.value, dtype=np.float64) @ np.array(mat2.arr.value, dtype=np.float64)
-    #         ad_matmul = mat1 @ mat2
-    #         self.assertEqual(np.array(np_matmul, dtype=np.float32).tolist(),
-    #                          np.array(ad_matmul.arr.value, dtype=np.float32).tolist())
+    def test_init(self):
+        a = ad.array(0.0)
+        b = ad.tensor(a)
+        self.assertEqual(b.arr.value, [0.0])
+        self.assertEqual(b.shape, (1, ))
+        a = ad.array(0)
+        b = ad.tensor(a)
+        self.assertEqual(b.arr.value, [0])
+        self.assertEqual(b.shape, (1, ))
+        a = ad.array([0])
+        b = ad.tensor(a)
+        self.assertEqual(b.arr.value, [0])
+        self.assertEqual(b.shape, (1, ))
+
+        a = ad.array([0, 1, 2.0, -9])
+        b = ad.tensor(a)
+        self.assertEqual(b.arr.value, [0, 1, 2.0, -9])
+        self.assertEqual(b.shape, (4, ))
+        a = ad.array([0, 1, 2.0, -9], outer_shape=())
+        b = ad.tensor(a)
+        self.assertEqual(b.arr.value, [0, 1, 2.0, -9])
+        self.assertEqual(b.shape, (4, ))
+
+        a = ad.array(2.1, outer_shape=(2, 2, 4))
+        b = ad.tensor(a)
+        self.assertEqual(b.arr.value, [
+            [[2.1, 2.1, 2.1, 2.1], [2.1, 2.1, 2.1, 2.1]],
+            [[2.1, 2.1, 2.1, 2.1], [2.1, 2.1, 2.1, 2.1]]
+        ])
+        self.assertEqual(b.shape, (2, 2, 4))
+        a = ad.array([2.1], outer_shape=(2, 2, 4))
+        b = ad.tensor(a)
+        self.assertEqual(b.arr.value, [
+            [[[2.1], [2.1], [2.1], [2.1]], [[2.1], [2.1], [2.1], [2.1]]],
+            [[[2.1], [2.1], [2.1], [2.1]], [[2.1], [2.1], [2.1], [2.1]]]
+        ])
+        self.assertEqual(b.shape, (2, 2, 4, 1))
+
+        b = ad.array(a)
+        c = ad.tensor(b)
+        self.assertEqual(b.value, c.arr.value)
+        self.assertEqual(b.shape, c.shape)
+
+    def test_op(self):
+        for _ in range(ITER):
+            l = np.random.randint(low=1, high=6)
+            size = np.random.randint(low=1, high=20, size=l)
+            random_drop_size = size[np.random.randint(low=0, high=l):]
+            ones_mask = np.random.rand(*random_drop_size.shape) < 0.5
+            random_drop_size[ones_mask] = 1
+
+            a = np.random.uniform(low=-500, high=500, size=size)
+            b = np.random.uniform(low=0.001, high=500, size=random_drop_size)
+            _a = ad.tensor(ad.array(a.tolist()))
+            _b = ad.tensor(ad.array(b.tolist()))
+            # Test for unary ops needs class specific functions
+            self.assertEqual(np.abs(a).tolist(), _a.abs().arr.value)
+            self.assertEqual(np.negative(a).tolist(), _a.neg().arr.value)
+            self.assertEqual(np.exp(a).tolist(), _a.exp().arr.value)
+            self.assertEqual(np.log(b).tolist(), _b.log().arr.value)
+            self.assertEqual(np.sin(a).tolist(), _a.sin().arr.value)
+            self.assertEqual(np.cos(a).tolist(), _a.cos().arr.value)
+            # Binary ops
+            self.assertTrue(all(op(a, b).tolist() == op(_a, _b).arr.value for op in OPS['binary']))
+            # Matmul
+            [n, k, m] = np.random.randint(low=1, high=5, size=3)
+            mat1 = ad.tensor(np.random.rand(*size[0:4], n, k).tolist())
+            mat2 = ad.tensor(np.random.rand(*size[0:4], k, m).tolist())
+            np_matmul = np.array(mat1.arr.value, dtype=np.float64) @ np.array(mat2.arr.value, dtype=np.float64)
+            ad_matmul = mat1 @ mat2
+            self.assertEqual(np.array(np_matmul, dtype=np.float32).tolist(),
+                             np.array(ad_matmul.arr.value, dtype=np.float32).tolist())
 
 
-    def test_differentiation(self):
-        input_dim = 20
-        # input_dim = np.random.randint(low=1, high=10)
-        output_dim = np.random.randint(low=1, high=10)
-        function_depth = 500
-        # function_depth = np.random.randint(low=1, high=10)
+    def test_differentiation_unary_binary(self):
+        input_dim = np.random.randint(low=1, high=20)
+        function_depth = np.random.randint(low=1, high=500)
         x = np.random.uniform(low=-2, high=2, size=(function_depth, input_dim)).astype(np.float64)
         v = np.random.uniform(low=-2, high=2, size=(function_depth, input_dim))
 
@@ -271,6 +269,39 @@ class test_tensor(unittest.TestCase):
         directions = {root: seed.tolist() for root, seed in zip(root_tensors, v)}
         tensor_tangents = [ad.jvp(y, None, directions).value for y in ys]
         self.assertEqual(np.array(jax_tangents, dtype=np.float32).tolist(), np.array(tensor_tangents, dtype=np.float32).tolist())
+
+
+    def test_differentiation_matmul(self):
+        for _ in range(ITER):
+            layers = np.random.randint(low=2, high=10)
+            layer_dims = np.exp2(np.random.randint(low=5, high=10, size=layers)).astype(np.int32)
+            x = [np.random.uniform(low=-10, high=10, size=(layer_dims[i], layer_dims[i+1])).astype(np.float64) for i in range(layers-1)]
+            v = [np.random.randint(low=-1, high=1, size=(layer_dims[i], layer_dims[i+1])).astype(np.float64) for i in range(layers-1)]
+
+            def random_function(inputs):
+                res = [inputs[0]]
+                for mat in inputs[1:]:
+                    res.append(res[-1] @ mat)
+                return res
+
+            f = random_function
+            (jax_outputs, jax_tangents) = jax.jvp(f, (x,), (v,))
+
+            # test for f(x)
+            root_tensors = [ad.tensor(x_i.tolist()) for x_i in x]
+            ys = [root_tensors[0]]
+            for y in ys[1:]: ys.append(ys[-1] @ y)
+            tensor_outputs = [y.arr.value for y in ys]
+            for jax_i, tensor_i in zip(jax_outputs, tensor_outputs):
+                self.assertEqual(np.array(jax_i, dtype=np.float32).tolist(),
+                                 np.array(tensor_i, dtype=np.float32).tolist())
+
+            # test for f'(x)
+            directions = {root: seed.tolist() for root, seed in zip(root_tensors, v)}
+            tensor_tangents = [ad.jvp(y, None, directions).value for y in ys]
+            for jax_i, tensor_i in zip(jax_tangents, tensor_tangents):
+                self.assertEqual(np.array(jax_i, dtype=np.float32).tolist(),
+                                 np.array(tensor_i, dtype=np.float32).tolist())
 
 
 cov.stop()
