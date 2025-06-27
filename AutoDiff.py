@@ -406,12 +406,12 @@ class tensor:
 
         seed_dict = {root: array(0, root.shape) for root in roots}
         for r in roots: r.tangent = seed_dict[r]
-        for seed in one_hot(self.shape):
+        for seed in one_hot_perms(self.shape):
             self.tangent = seed
             seed_dict[self] = seed
             self.gradient = jvp(y, None, seed_dict)
 
-    def grad_bwd(self):
+    # def grad_bwd(self):
 
     def add_parent(self, *args: tensor) -> None:
         self.parent.extend([arg for arg in args])
@@ -576,8 +576,8 @@ class tensor:
         matmul_tensor._prop_tan = _prop_tan
         def _prop_val(): matmul_tensor.arr = self.arr @ other_tensor.arr
         matmul_tensor._prop_val = _prop_val
-        def _prop_grad():
-            self.gradient += matmul_tensor.gradient * 
+        # def _prop_grad():
+        #     self.gradient += matmul_tensor.gradient *
         return matmul_tensor
 
     def __rmatmul__(self, other) -> tensor:
@@ -707,11 +707,32 @@ def identity(shape: int) -> float | array:
     return 1.0 if shape == 1 else array([[float(j == i) for j in range(shape)] for i in range(shape)])
 
 
+def transpose(v: ListLike) -> ListLike:
+    """
+    This is a wrapper function
+    """
+    if isinstance(v, list):
+        return _transpose(v)
+    if isinstance(v, array) or isinstance(v, tensor):
+        return v.transpose()
+    else:
+        raise ValueError(f'Input must be list|array|tensor, get {type(v)}')
+
+
+def _transpose(v: list) -> list:
+    """
+    This function does not validate whether the input is homogeneous.
+    Incompatible shape may produce unexpected output.
+    """
+    
+    return v
+
+
 def sign(v: Number) -> float:
     return 1.0 if v > 0 else -1.0 if v < 0 else 0.0
 
 
-def one_hot(shape: tuple):
+def one_hot_perms(shape: tuple):
     seed = array(0.0, shape)
     p = [[seed.value]]
     while isinstance(p[0][0], list):
