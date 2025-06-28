@@ -77,6 +77,9 @@ class array:
         _flatten(self.value)
         return _flatten_list
 
+    def transpose(self) -> array:
+        return array(transpose(self.value))
+
     def check_shape(self) -> tuple:
         arr = self.value
         shape = ()
@@ -112,17 +115,7 @@ class array:
         return result
 
     def elementwise(self, op, other: array = None, inplace=False) -> array:
-        if not other:
-            return self._elementwise_unary(op)
-
-        # def _ew(x1, x2):
-        #     if isinstance(x1[0], list): return [_ew(x1_i, x2) for x1_i in x1]
-        #     elif isinstance(x2[0], list): return [_ew(x1, x2_i) for x2_i in x2]
-        #     else: return [op(x1[min(i, len(x1)-1)], x2[min(i, len(x2)-1)]) for i in range(max(len(x1), len(x2)))]
-        #
-        # result_array = self if inplace else array(0)
-        # result_array.value = _ew(self.value, other.value)
-        # result_array.shape = self.broadcast_with(other)
+        if not other: return self._elementwise_unary(op)
         result_array = self if inplace else array(0)
         result_array.value = binary_elementwise(self.value, other.value, op)
         result_array.shape = self.broadcast_with(other)
@@ -442,7 +435,9 @@ class tensor:
         self.add_child(add_tensor)
         other_tensor.add_child(add_tensor)
 
-        def _prop_val(): add_tensor.arr = self.arr + other_tensor.arr
+        def _prop_val():
+            add_tensor.arr = self.arr + other_tensor.arr
+            add_tensor.shape = add_tensor.arr.shape
         add_tensor._prop_val = _prop_val
         def _prop_tan(): add_tensor.tangent = self.tangent + other_tensor.tangent
         add_tensor._prop_tan = _prop_tan
@@ -467,7 +462,9 @@ class tensor:
         self.add_child(sub_tensor)
         other_tensor.add_child(sub_tensor)
 
-        def _prop_val(): sub_tensor.arr = self.arr - other_tensor.arr
+        def _prop_val():
+            sub_tensor.arr = self.arr - other_tensor.arr
+            sub_tensor.shape = sub_tensor.arr.shape
         sub_tensor._prop_val = _prop_val
         def _prop_tan(): sub_tensor.tangent = self.tangent - other_tensor.tangent
         sub_tensor._prop_tan = _prop_tan
@@ -504,10 +501,10 @@ class tensor:
         neg_tensor.add_parent(self)
         self.add_child(neg_tensor)
 
-        def _prop_tan(): neg_tensor.tangent = -self.tangent
-        neg_tensor._prop_tan = _prop_tan
         def _prop_val(): neg_tensor.arr = -self.arr
         neg_tensor._prop_val = _prop_val
+        def _prop_tan(): neg_tensor.tangent = -self.tangent
+        neg_tensor._prop_tan = _prop_tan
         def _prop_grad(): self.gradient += -neg_tensor.gradient
         neg_tensor._prop_grad = _prop_grad
         return neg_tensor
@@ -519,7 +516,9 @@ class tensor:
         self.add_child(mul_tensor)
         other_tensor.add_child(mul_tensor)
 
-        def _prop_val(): mul_tensor.arr = self.arr * other_tensor.arr
+        def _prop_val():
+            mul_tensor.arr = self.arr * other_tensor.arr
+            mul_tensor.shape = mul_tensor.arr.shape
         mul_tensor._prop_val = _prop_val
         def _prop_tan(): mul_tensor.tangent = other_tensor.arr * self.tangent + self.arr * other_tensor.tangent
         mul_tensor._prop_tan = _prop_tan
@@ -544,7 +543,9 @@ class tensor:
         self.add_child(div_tensor)
         other_tensor.add_child(div_tensor)
 
-        def _prop_val(): div_tensor.arr = self.arr / other_tensor.arr
+        def _prop_val():
+            div_tensor.arr = self.arr / other_tensor.arr
+            div_tensor.shape = div_tensor.arr.shape
         div_tensor._prop_val = _prop_val
         def _prop_tan():
             one_over_b = 1.0 / other_tensor.arr
@@ -572,10 +573,12 @@ class tensor:
         self.add_child(matmul_tensor)
         other_tensor.add_child(matmul_tensor)
 
+        def _prop_val():
+            matmul_tensor.arr = self.arr @ other_tensor.arr
+            matmul_tensor.shape = matmul_tensor.arr.shape
+        matmul_tensor._prop_val = _prop_val
         def _prop_tan(): matmul_tensor.tangent = self.tangent * other_tensor.arr + self.arr * other_tensor.tangent
         matmul_tensor._prop_tan = _prop_tan
-        def _prop_val(): matmul_tensor.arr = self.arr @ other_tensor.arr
-        matmul_tensor._prop_val = _prop_val
         # def _prop_grad():
         #     self.gradient += matmul_tensor.gradient *
         return matmul_tensor
@@ -587,10 +590,12 @@ class tensor:
         self.add_child(matmul_tensor)
         other_tensor.add_child(matmul_tensor)
 
+        def _prop_val():
+            matmul_tensor.arr = other_tensor.arr @ self.arr
+            matmul_tensor.shape = matmul_tensor.arr.shape
+        matmul_tensor._prop_val = _prop_val
         def _prop_tan(): matmul_tensor.tangent = self.tangent * other_tensor.arr + self.arr * other_tensor.tangent
         matmul_tensor._prop_tan = _prop_tan
-        def _prop_val(): matmul_tensor.arr = other_tensor.arr @ self.arr
-        matmul_tensor._prop_val = _prop_val
         return matmul_tensor
 
     def check_shape(self) -> tuple:
@@ -608,10 +613,10 @@ class tensor:
         exp_tensor.add_parent(self)
         self.add_child(exp_tensor)
 
-        def _prop_tan(): exp_tensor.tangent = self.tangent * exp_tensor.arr
-        exp_tensor._prop_tan = _prop_tan
         def _prop_val(): exp_tensor.arr = self.arr.exp()
         exp_tensor._prop_val = _prop_val
+        def _prop_tan(): exp_tensor.tangent = self.tangent * exp_tensor.arr
+        exp_tensor._prop_tan = _prop_tan
         return exp_tensor
 
     def log(self) -> tensor:
@@ -619,10 +624,10 @@ class tensor:
         log_tensor.add_parent(self)
         self.add_child(log_tensor)
 
-        def _prop_tan(): log_tensor.tangent = self.tangent / self.arr
-        log_tensor._prop_tan = _prop_tan
         def _prop_val(): log_tensor.arr = self.arr.log()
         log_tensor._prop_val = _prop_val
+        def _prop_tan(): log_tensor.tangent = self.tangent / self.arr
+        log_tensor._prop_tan = _prop_tan
         return log_tensor
 
     def sin(self) -> tensor:
@@ -630,10 +635,10 @@ class tensor:
         sin_tensor.add_parent(self)
         self.add_child(sin_tensor)
 
-        def _prop_tan(): sin_tensor.tangent = self.arr.cos() * self.tangent
-        sin_tensor._prop_tan = _prop_tan
         def _prop_val(): sin_tensor.arr = self.arr.sin()
         sin_tensor._prop_val = _prop_val
+        def _prop_tan(): sin_tensor.tangent = self.arr.cos() * self.tangent
+        sin_tensor._prop_tan = _prop_tan
         return sin_tensor
 
     def cos(self) -> tensor:
@@ -641,10 +646,10 @@ class tensor:
         cos_tensor.add_parent(self)
         self.add_child(cos_tensor)
 
-        def _prop_tan(): cos_tensor.tangent = -self.arr.sin() * self.tangent
-        cos_tensor._prop_tan = _prop_tan
         def _prop_val(): cos_tensor.arr = self.arr.cos()
         cos_tensor._prop_val = _prop_val
+        def _prop_tan(): cos_tensor.tangent = -self.arr.sin() * self.tangent
+        cos_tensor._prop_tan = _prop_tan
         return cos_tensor
 
     def pow(self, p: Number) -> tensor:
@@ -652,13 +657,26 @@ class tensor:
         pow_tensor.add_parent(self)
         self.add_child(pow_tensor)
 
+        def _prop_val(): pow_tensor.arr = self.arr.__pow__(p)
+        pow_tensor._prop_val = _prop_val
         def _prop_tan():
             # pow_tensor._tangent = self.arr.elementwise(lambda x: 0 if x == 0 else pow(x, p-1)) * self._tangent
             pow_tensor.tangent = pow_tensor.arr / self.arr * self.tangent  # When x == 0 this will cause problem
         pow_tensor._prop_tan = _prop_tan
-        def _prop_val(): pow_tensor.arr = self.arr.__pow__(p)
-        pow_tensor._prop_val = _prop_val
         return pow_tensor
+
+    def transpose(self) -> tensor:
+        trans_tensor = tensor.intermediate_tensor(transpose(self.arr), op_name='tra')
+        trans_tensor.add_parent(self)
+        self.add_child(trans_tensor)
+
+        def _prop_val():
+            trans_tensor.arr = transpose(self.arr)
+            trans_tensor.check_shape()
+        trans_tensor._prop_val = _prop_val
+        def _prop_tan(): pass
+        def _prop_grad(): pass
+        return trans_tensor
 
 
 def all_tensors():
@@ -707,6 +725,31 @@ def identity(shape: int) -> float | array:
     return 1.0 if shape == 1 else array([[float(j == i) for j in range(shape)] for i in range(shape)])
 
 
+def flatten(v: ListLike) -> ListLike:
+    """
+    This is a wrapper function
+    """
+    if isinstance(v, list):
+        return _flatten(v)
+    if isinstance(v, array) or isinstance(v, tensor):
+        return v.flatten()
+    else:
+        raise ValueError(f'Input must be list|array|tensor, get {type(v)}')
+
+
+def _flatten(v: list) -> list:
+    """
+    This function does not validate whether the input is homogeneous.
+    Incompatible shape may produce unexpected output.
+    """
+    while isinstance(v[0], list):
+        temp = []
+        for v_i in v:
+            temp.extend(v_i)
+        v = temp
+    return v
+
+
 def transpose(v: ListLike) -> ListLike:
     """
     This is a wrapper function
@@ -724,11 +767,22 @@ def _transpose(v: list) -> list:
     This function does not validate whether the input is homogeneous.
     Incompatible shape may produce unexpected output.
     """
-    
-    return v
+    shape = [len(v)]
+    while isinstance(v[0], list):
+        shape.append(len(v[0]))
+        temp = []
+        for v_i in v: temp.extend(v_i)
+        v = temp
+
+    stripe = len(v)
+    for s in shape:
+        stripe //= s
+        v = [[v[i+j*stripe] for j in range(s)] for i in range(stripe)]
+    return v[0]
 
 
 def sign(v: Number) -> float:
+    # return 2.0*(v > 0) - (v != 0)
     return 1.0 if v > 0 else -1.0 if v < 0 else 0.0
 
 
