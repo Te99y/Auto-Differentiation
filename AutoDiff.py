@@ -46,7 +46,6 @@ class array:
             if outer_shape:
                 for s in reversed(outer_shape):
                     self.value = [deepcopy(self.value) for _ in range(s)]
-            # self.shape = self.check_shape()
             self.shape = outer_shape + inner_shape
 
         elif isinstance(init_value, Number):
@@ -63,23 +62,13 @@ class array:
             print(init_value)
             raise ValueError('How did you even get here?')
 
-    def flatten(self) -> list:
-        # Refine this function
-        _flatten_list = []
-
-        def _flatten(lst):
-            if isinstance(lst[0], list):
-                for li in lst: _flatten(li)  # noqa: E701
-            else:
-                _flatten_list.extend(lst)
-
-        _flatten(self.value)
-        return _flatten_list
+    def flatten(self) -> array:
+        return array(_flatten(self.value))
 
     def transpose(self) -> array:
         return array(transpose(self.value))
 
-    def check_shape(self) -> tuple:
+    def update_shape(self) -> tuple:
         arr = self.value
         shape = ()
         while isinstance(arr, list):
@@ -300,7 +289,7 @@ class array:
 
         result_array = array(0)
         result_array.value = _matmul(self.value, other.value)
-        result_array.check_shape()
+        result_array.update_shape()
         return result_array
     
     def __rmatmul__(self, other):
@@ -318,7 +307,7 @@ class array:
                 raise ValueError(f'Cannot broadcast between {self.shape} and {other_arr.shape}.')
 
         self.value = _matmul(self.value, other.value)
-        self.check_shape()
+        self.update_shape()
         return self
 
     def abs(self) -> array:
@@ -597,8 +586,8 @@ class tensor:
     def __imatmul__(self, other) -> tensor:
         return self @ other
 
-    def check_shape(self) -> tuple:
-        self.shape = self.arr.check_shape()
+    def update_shape(self) -> tuple:
+        self.shape = self.arr.update_shape()
         return self.shape
 
     def abs(self) -> tensor:
@@ -681,7 +670,7 @@ class tensor:
 
         def _prop_val():
             trans_tensor.arr = transpose(self.arr)
-            trans_tensor.check_shape()
+            trans_tensor.update_shape()
         trans_tensor._prop_val = _prop_val
         return trans_tensor
 
