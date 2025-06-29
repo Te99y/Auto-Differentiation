@@ -93,19 +93,19 @@ class test_array(unittest.TestCase):
     def test_flatten(self):
         a = np.random.randn(2, 3, 4, 1, 6)
         _a = ad.array(a.tolist())
-        self.assertEqual(a.flatten().tolist(), _a.flatten())
+        self.assertEqual(a.flatten().tolist(), _a.flatten().value)
 
     def test_check_shape(self):
         shape = np.random.randint(low=1, high=5, size=5)
         a = np.random.randn(*shape)
         _a = ad.array(a.tolist())
-        self.assertEqual(tuple(shape), _a.check_shape())
+        self.assertEqual(tuple(shape), _a.update_shape())
 
     def test_broadcast(self):
         shape = np.random.randint(low=1, high=5, size=5)
         a = np.random.randn(*shape)
         _a = ad.array(a.tolist())
-        self.assertEqual(tuple(shape), _a.check_shape())
+        self.assertEqual(tuple(shape), _a.update_shape())
 
     def test_ops(self):
         for _ in range(ITER):
@@ -139,7 +139,7 @@ class test_array(unittest.TestCase):
 
 class test_tensor(unittest.TestCase):
     def setUp(self) -> None:
-        ad.TENSOR_MAP.clear()
+        ad.tensor.TENSOR_MAP.clear()
 
     def test_init(self):
         a = ad.array(0.0)
