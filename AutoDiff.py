@@ -617,10 +617,7 @@ def _flatten(v: list) -> list:
     Incompatible shape may produce unexpected output.
     """
     while isinstance(v[0], list):
-        temp = []
-        for v_i in v:
-            temp.extend(v_i)
-        v = temp
+        v = sum(v, [])
     return v
 
 
@@ -628,12 +625,9 @@ def transpose(v: ListLike) -> ListLike:
     """
     This is a wrapper function
     """
-    if isinstance(v, list):
-        return _transpose(v)
-    if isinstance(v, array) or isinstance(v, tensor):
-        return v.transpose()
-    else:
-        raise ValueError(f'Input must be list|array|tensor, get {type(v)}')
+    if isinstance(v, list): return _transpose(v)
+    if isinstance(v, array | tensor): return v.transpose()
+    else: raise ValueError(f'Input must be list|array|tensor, get {type(v)}')
 
 
 def _transpose(v: list) -> list:
@@ -644,9 +638,7 @@ def _transpose(v: list) -> list:
     shape = [len(v)]
     while isinstance(v[0], list):
         shape.append(len(v[0]))
-        temp = []
-        for v_i in v: temp.extend(v_i)
-        v = temp
+        v = sum(v, [])
 
     stripe = len(v)
     for s in shape:
@@ -687,10 +679,8 @@ def one_hot_perms(shape: tuple):
     seed = array(0.0, shape)
     p = [[seed.value]]
     while isinstance(p[0][0], list):
-        new_p = []
-        for pi in p:
-            new_p.extend(pi)
-        p = new_p
+        p = sum(p, [])
+
     for pi in p:
         for j in range(len(pi)):
             pi[j] = 1.0
