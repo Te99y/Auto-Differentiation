@@ -819,6 +819,28 @@ def one_hot_perms(shape: tuple):
             pi[j] = 0.0
 
 
+def check_shape(v: ListLike | Number) -> tuple:
+    """
+    This is a wrapper function
+    """
+    if isinstance(v, Number): return ()
+    if isinstance(v, array | tensor): return v.update_shape()
+    if isinstance(v, list): return _check_shape(v)
+    else: raise ValueError(f'Input type {type(v)} is not allowed.')
+
+
+def _check_shape(v: list) -> tuple:
+    """
+    This function does not validate whether the input is homogeneous.
+    If the input contains an empty list, an IndexError might be thrown.
+    """
+    res = (len(v), )
+    while isinstance(v[0], list):
+        res += (len(v[0]), )
+        v = v[0]
+    return res
+
+
 def broadcast(shape1: tuple, shape2: tuple) -> tuple:
     res_shape = ()
     for d1, d2 in zip(reversed(shape1), reversed(shape2)):
@@ -830,7 +852,6 @@ def broadcast(shape1: tuple, shape2: tuple) -> tuple:
             raise TypeError(f'Cannot broadcast between {shape1} and {shape2}, miss matched at {d1} and {d2}')
 
     return shape1[:-len(shape2)] + tuple(reversed(res_shape)) if len(shape1) > len(shape2) else shape2[:-len(shape1)] + tuple(reversed(res_shape))
-
 
 
 def depth(v: list | Number) -> int:
