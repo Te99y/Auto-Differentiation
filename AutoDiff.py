@@ -662,7 +662,6 @@ class tensor:
         flat_tensor._prop_val = _prop_val
         return flat_tensor
 
-
     def transpose(self) -> tensor:
         trans_tensor = tensor.intermediate_tensor(transpose(self.arr), op_name='tra')
         trans_tensor.add_parent(self)
@@ -818,6 +817,20 @@ def one_hot_perms(shape: tuple):
             pi[j] = 1.0
             yield seed
             pi[j] = 0.0
+
+
+def broadcast(shape1: tuple, shape2: tuple) -> tuple:
+    res_shape = ()
+    for d1, d2 in zip(reversed(shape1), reversed(shape2)):
+        if d1 == d2 or d2 == 1:
+            res_shape += (d1,)
+        elif d1 == 1:
+            res_shape += (d2,)
+        else:
+            raise TypeError(f'Cannot broadcast between {shape1} and {shape2}, miss matched at {d1} and {d2}')
+
+    return shape1[:-len(shape2)] + tuple(reversed(res_shape)) if len(shape1) > len(shape2) else shape2[:-len(shape1)] + tuple(reversed(res_shape))
+
 
 
 def depth(v: list | Number) -> int:
