@@ -78,7 +78,6 @@ class array:
         return shape
 
     def broadcast_with(self, other: Number | ListLike) -> tuple:
-        # Refine this function
         """
         Try to broadcast between 2 arrays. If each dim are equivalent or =1 then they can broadcast
         :param other: The other number or list-like numbers
@@ -87,128 +86,19 @@ class array:
         """
         shape1 = self.shape
         shape2 = other.shape if isinstance(other, array) else array(other).shape
-        if len(shape2) > len(shape1):  # keep shape1 longer then shape2
-            temp = shape1
-            shape1 = shape2
-            shape2 = temp
-        residual = len(shape1) - len(shape2)
-        result = () + shape1[:residual]
-        for d1, d2 in zip(shape1[residual:], shape2):
-            if d1 == d2 or d2 == 1:
-                result += (d1,)
-            elif d1 == 1:
-                result += (d2,)
-            else:
-                raise TypeError(f'Cannot broadcast between {shape1} and {shape2}, miss matched at {d1} and {d2}')
-        return result
+        return broadcast(shape1, shape2)
 
     def elementwise(self, op, other: array = None, inplace=False) -> array:
         if not other: return self._elementwise_unary(op)
         result_array = self if inplace else array(0)
         result_array.value = binary_elementwise(self.value, other.value, op)
         result_array.shape = self.broadcast_with(other)
-
         return result_array
-
-    # ==============================================================================================================
-    # Before 20250619 the elementwise method was this crazy big chunk of code, and there would be error
-    # on some edge cases. I'm grateful that I refactored it. It's beautiful now.
-    #
-    # def elementwise(self, op, other: array = None, inplace=False) -> array:
-    #     """
-    #     Performs elementwise operation on 1 or 2 arrays
-    #
-    #     :param op: [+, -, *, /, neg, abs, exp, log, cos, sin]
-    #     :param other: Another list
-    #     :param inplace: perform the op inplace or not
-    #     :return: The result array
-    #     """
-    #     if not other:
-    #         return self._elementwise_unary(op)
-    #
-    #     broadcast_shape = self.broadcast_with(other)
-    #     v1 = self.value
-    #     v2 = other.value
-    #     for _ in range(len(broadcast_shape) - len(self.shape)):
-    #         v1 = [v1]
-    #     for _ in range(len(broadcast_shape) - len(other.shape)):
-    #         v2 = [v2]
-    #     padded_shape1 = (1,) * (len(broadcast_shape) - len(self.shape)) + self.shape
-    #     padded_shape2 = (1,) * (len(broadcast_shape) - len(other.shape)) + other.shape
-    #
-    #     broadcast_index = [s - 1 for s in broadcast_shape][:-1]
-    #     padded_index1 = [s - 1 for s in padded_shape1][:-1]
-    #     padded_index2 = [s - 1 for s in padded_shape2][:-1]
-    #     indexes = [0] * (len(broadcast_index))
-    #     fuse = 1
-    #     res = []
-    #
-    #     for d in reversed(broadcast_shape[:-1]):  # ex: shape=[2, 3, 4, 5], i=[2, 1, 0]
-    #         fuse *= d
-    #         temp = res
-    #         res = [deepcopy(temp) for _ in range(d)]  # prep the shell for most inner layer
-    #
-    #     cnt = 0
-    #     # This is definitely not a good approach
-    #     while cnt < fuse:
-    #         pointer1 = v1
-    #         pointer2 = v2
-    #         for i, i1, i2 in zip(indexes, padded_index1, padded_index2):
-    #             pointer1 = pointer1[min(i, i1)]
-    #             pointer2 = pointer2[min(i, i2)]
-    #         p = res
-    #         for i in indexes:
-    #             p = p[i]  # find the placeholder vector
-    #         p.extend(  # extend with a whole vector
-    #             [op(a, pointer2[0]) for a in pointer1] if len(pointer2) == 1
-    #             else [op(pointer1[0], b) for b in pointer2] if len(pointer2) == 1
-    #             else [op(p1, p2) for p1, p2 in zip(pointer1, pointer2)])
-    #
-    #         # If input is number, index[-1] will raise outOfBound
-    #         if cnt + 1 >= fuse:
-    #             break
-    #         # Move to next index, check carry of each digit
-    #         indexes[-1] += 1
-    #         for i in reversed(range(len(indexes))):
-    #             if i > 0 and indexes[i] > broadcast_index[i]:
-    #                 indexes[i] = 0
-    #                 indexes[i - 1] += 1
-    #         cnt += 1
-    #
-    #     # Currently if inplace is True, we just points self.value to new array
-    #     # result_array = self if inplace else array(0)
-    #     # result_array.value = res
-    #     # result_array.shape = broadcast_shape
-    #     # Turns out if we do the above, we won't be able to differentiate due to not creating a new tensor
-    #     result_array = self if inplace else array(0)
-    #     result_array.value = res
-    #     result_array.shape = broadcast_shape
-    #     return result_array
-    # ==============================================================================================================
 
     def _elementwise_unary(self, op, inplace=False) -> array:
         result_array = self if inplace else array(0)
+        result_array.value = unary_elementwise(self.value, op)
         result_array.shape = self.shape
-
-        #  ------------------ Non-recursive ------------------
-        # result_array.value = deepcopy(self.value)
-        # pointer = [result_array.value]
-        # for _ in result_array.shape[:-1]:
-        #     new_pointer = []
-        #     for sub in pointer:
-        #         new_pointer += sub
-        #     pointer = new_pointer
-        # for i in range(len(pointer)):
-        #     for j in range(len(pointer[i])):
-        #         pointer[i][j] = op(pointer[i][j])
-
-        #  -------------------- Recursive --------------------
-        def _ew(_lst, _op):
-            if isinstance(_lst, list):
-                return [_ew(s, _op) for s in _lst]
-            return _op(_lst)
-
-        result_array.value = _ew(self.value, op)
         return result_array
 
     def __str__(self):
@@ -298,14 +188,6 @@ class array:
     
     def __imatmul__(self, other) -> array:
         other_arr = other if isinstance(other, array) else array(other)
-        if self.shape[-1] != other_arr.shape[-2]:
-            raise ValueError(f'The last dim of {self.shape} does not equal the second to last dim '
-                             f'of the {other_arr.shape}. Refer to the signature (...,n,k),(...,k,m)->(...,n,m).')
-
-        for dim1, dim2 in zip(reversed(self.shape[2:]), reversed(other_arr.shape[2:])):
-            if dim1 != dim2 and dim1 != 0 and dim2 != 0:
-                raise ValueError(f'Cannot broadcast between {self.shape} and {other_arr.shape}.')
-
         self.value = _matmul(self.value, other.value)
         self.update_shape()
         return self
@@ -724,12 +606,9 @@ def flatten(v: ListLike) -> ListLike:
     """
     This is a wrapper function
     """
-    if isinstance(v, list):
-        return _flatten(v)
-    if isinstance(v, array) or isinstance(v, tensor):
-        return v.flatten()
-    else:
-        raise ValueError(f'Input must be list|array|tensor, get {type(v)}')
+    if isinstance(v, list): return _flatten(v)
+    if isinstance(v, array | tensor): return v.flatten()
+    else: raise ValueError(f'Input must be list|array|tensor, get {type(v)}')
 
 
 def _flatten(v: list) -> list:
