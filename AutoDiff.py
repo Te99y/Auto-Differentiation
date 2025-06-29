@@ -4,7 +4,6 @@ import operator
 from typing import Union
 from copy import deepcopy
 
-TENSOR_MAP = []
 Number = Union[int | float]
 ListLike = Union['array', 'tensor', list]
 
@@ -354,6 +353,8 @@ class tensor:
     Pytorch is based on dynamic-graph while TensorFlow and Jax implements static graph. In that
     case they would save the graph and reuse it, which would require the ._prop_val() function.
     """
+    TENSOR_MAP: list[tensor] = []
+
     def __init__(self,
                  value: Number | list | array | tensor,
                  op_name: str = '   ',
@@ -364,7 +365,7 @@ class tensor:
         self.op_name = op_name  # default leaf node = '   '
         self.requires_grad = requires_grad  # Allow gradients to flow through it
         self.is_leaf = is_leaf  # I like to call it root, but it's leaf as they appear on the tree structure
-        self.tag = len(TENSOR_MAP)
+        self.tag = len(tensor.TENSOR_MAP)
         self.child: list[tensor] = []
         self.parent: list[tensor] = []
         self.tangent = array(0)
@@ -372,7 +373,7 @@ class tensor:
         self._prop_tan = lambda: None  # default do nothing
         self._prop_val = lambda: None  # default do nothing
         self._prop_grad = lambda: None  # default do nothing
-        TENSOR_MAP.append(self)
+        tensor.TENSOR_MAP.append(self)
 
     def topo(self, visited: set, order: list, roots: list) -> None:
         """
@@ -451,9 +452,10 @@ class tensor:
         return self + other
 
     def __iadd__(self, other) -> tensor:
-        other_tensor = other if isinstance(other, tensor) else tensor(other)
+        # other_tensor = other if isinstance(other, tensor) else tensor(other)
         # self.arr += other_tensor.arr
-        return self + other_tensor
+        # return self + other_tensor
+        return self + other
 
     def __sub__(self, other) -> tensor:
         other_tensor = other if isinstance(other, tensor) else tensor.const_tensor(other)
@@ -479,9 +481,10 @@ class tensor:
         return other_tensor - self
 
     def __isub__(self, other) -> tensor:
-        other_tensor = other if isinstance(other, tensor) else tensor(other)
+        # other_tensor = other if isinstance(other, tensor) else tensor(other)
         # self.arr -= other_tensor.arr
-        return self - other_tensor
+        # return self - other_tensor
+        return self - other
 
     def __abs__(self) -> tensor:
         abs_tensor = tensor.intermediate_tensor(self.arr.abs(), op_name='abs')
@@ -532,9 +535,10 @@ class tensor:
         return self * other
 
     def __imul__(self, other) -> tensor:
-        other_tensor = other if isinstance(other, tensor) else tensor(other)
+        # other_tensor = other if isinstance(other, tensor) else tensor(other)
         # self.arr *= other_tensor.arr
-        return self * other_tensor
+        # return self * other_tensor
+        return self * other
 
     def __truediv__(self, other) -> tensor:
         other_tensor = other if isinstance(other, tensor) else tensor.const_tensor(other)
@@ -562,9 +566,10 @@ class tensor:
         return other_tensor / self
 
     def __itruediv__(self, other) -> tensor:
-        other_tensor = other if isinstance(other, tensor) else tensor(other)
+        # other_tensor = other if isinstance(other, tensor) else tensor(other)
         # self.arr /= other_tensor.arr
-        return self / other_tensor
+        # return self / other_tensor
+        return self / other
 
     def __matmul__(self, other) -> tensor:
         other_tensor = other if isinstance(other, tensor) else tensor.const_tensor(other)
@@ -579,24 +584,18 @@ class tensor:
         matmul_tensor._prop_val = _prop_val
         def _prop_tan(): matmul_tensor.tangent = self.tangent * other_tensor.arr + self.arr * other_tensor.tangent
         matmul_tensor._prop_tan = _prop_tan
-        # def _prop_grad():
-        #     self.gradient += matmul_tensor.gradient *
+        def _prop_grad():
+            self.gradient += matmul_tensor.gradient @ transpose(self.arr)
+            other_tensor.gradient += transpose(other_tensor.arr) @ matmul_tensor.gradient
+        matmul_tensor._prop_grad = _prop_grad
         return matmul_tensor
 
     def __rmatmul__(self, other) -> tensor:
         other_tensor = other if isinstance(other, tensor) else tensor.const_tensor(other)
-        matmul_tensor = tensor.intermediate_tensor(other_tensor.arr @ self.arr, op_name='mat')
-        matmul_tensor.add_parent(self, other_tensor)
-        self.add_child(matmul_tensor)
-        other_tensor.add_child(matmul_tensor)
+        return other_tensor @ self
 
-        def _prop_val():
-            matmul_tensor.arr = other_tensor.arr @ self.arr
-            matmul_tensor.shape = matmul_tensor.arr.shape
-        matmul_tensor._prop_val = _prop_val
-        def _prop_tan(): matmul_tensor.tangent = self.tangent * other_tensor.arr + self.arr * other_tensor.tangent
-        matmul_tensor._prop_tan = _prop_tan
-        return matmul_tensor
+    def __imatmul__(self, other) -> tensor:
+        return self @ other
 
     def check_shape(self) -> tuple:
         self.shape = self.arr.check_shape()
@@ -665,6 +664,16 @@ class tensor:
         pow_tensor._prop_tan = _prop_tan
         return pow_tensor
 
+    def flatten(self) -> tensor:
+        flat_tensor = tensor.intermediate_tensor(flatten(self.arr), op_name='tra')
+        flat_tensor.add_parent(self)
+        self.add_child(flat_tensor)
+
+        def _prop_val(): flat_tensor.arr = flatten(self.arr)
+        flat_tensor._prop_val = _prop_val
+        return flat_tensor
+
+
     def transpose(self) -> tensor:
         trans_tensor = tensor.intermediate_tensor(transpose(self.arr), op_name='tra')
         trans_tensor.add_parent(self)
@@ -674,13 +683,11 @@ class tensor:
             trans_tensor.arr = transpose(self.arr)
             trans_tensor.check_shape()
         trans_tensor._prop_val = _prop_val
-        def _prop_tan(): pass
-        def _prop_grad(): pass
         return trans_tensor
 
 
 def all_tensors():
-    print('\n'.join([t.__str__() for t in TENSOR_MAP], ))
+    print('\n'.join([t.__str__() for t in tensor.TENSOR_MAP], ))
 
 
 def neg(v: tensor | Number) -> float | tensor:
@@ -781,12 +788,35 @@ def _transpose(v: list) -> list:
     return v[0]
 
 
+def kronecker_product(v1: list | array, v2: list | array) -> ListLike:
+    """
+    This is a wrapper function
+    """
+    if isinstance(v1, list) and isinstance(v2, list):
+        return _kronecker_product(v1, v2)
+    if isinstance(v1, array) and isinstance(v2, array):
+        return _kronecker_product(v1.value, v2.value)
+    raise ValueError(f'Input types do not match. Got {type(v1)}, {type(v2)}')
+
+
+def _kronecker_product(v1: list, v2: list) -> list:
+    """
+    This function does not validate whether the input is homogeneous.
+    Incompatible shape may produce unexpected output.
+    """
+    return unary_elementwise(v1, lambda v1_i: binary_elementwise([v1_i], v2, operator.mul))
+    # [v1_i] because bin_ew takes list as param
+
+
 def sign(v: Number) -> float:
     # return 2.0*(v > 0) - (v != 0)
     return 1.0 if v > 0 else -1.0 if v < 0 else 0.0
 
 
 def one_hot_perms(shape: tuple):
+    """
+    This is a generator
+    """
     seed = array(0.0, shape)
     p = [[seed.value]]
     while isinstance(p[0][0], list):
@@ -813,20 +843,25 @@ def depth(v: list | Number) -> int:
     return cnt
 
 
-def binary_elementwise(x1: list, x2: list, op) -> list:
+def unary_elementwise(x: list, op) -> list:
+    if isinstance(x[0], Number): return [op(x_i) for x_i in x]
+    return [unary_elementwise(x_i, op) for x_i in x]
+
+
+def binary_elementwise(v1: list, v2: list, op) -> list:
     """
     This function does not validate whether the inputs are homogeneous or broadcastable.
     Incompatible shapes may produce unexpected output.
     """
-    if isinstance(x1[0], Number) and isinstance(x2[0], Number):
-        return [op(x1[min(i, len(x1)-1)], x2[min(i, len(x2)-1)]) for i in range(max(len(x1), len(x2)))]
-    d1, d2 = depth(x1), depth(x2)
-    if d1 == d2: return [binary_elementwise(x1[min(i, len(x1)-1)], x2[min(i, len(x2)-1)], op) for i in range(max(len(x1), len(x2)))]
-    if d1 > d2: return [binary_elementwise(x1_i, x2, op) for x1_i in x1]
-    return [binary_elementwise(x1, x2_i, op) for x2_i in x2]
+    if isinstance(v1[0], Number) and isinstance(v2[0], Number):
+        return [op(v1[min(i, len(v1)-1)], v2[min(i, len(v2)-1)]) for i in range(max(len(v1), len(v2)))]
+    d1, d2 = depth(v1), depth(v2)
+    if d1 == d2: return [binary_elementwise(v1[min(i, len(v1)-1)], v2[min(i, len(v2)-1)], op) for i in range(max(len(v1), len(v2)))]
+    if d1 > d2: return [binary_elementwise(v1_i, v2, op) for v1_i in v1]
+    return [binary_elementwise(v1, v2_i, op) for v2_i in v2]
 
 
-def matmul(v1: ListLike, v2: ListLike):
+def matmul(v1: ListLike, v2: ListLike) -> ListLike:
     """
     This is a wrapper function
     """
