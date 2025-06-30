@@ -259,27 +259,6 @@ class tensor:
         order.append(self)
         visited.add(self)
 
-    def grad_fwd(self, y: tensor) -> None:
-        """
-        Calculate the gradient of self(usually an output) w.r.t every root with #param of forward sweeps.
-        The intermediate tangents are stored in tensor._tangent along the tensors on the way.
-
-        :return: None
-        """
-        visited = set()
-        order: list[tensor] = []
-        roots: list[tensor] = []
-        self.topo(visited, order, roots)
-
-        seed_dict = {root: array(0, root.shape) for root in roots}
-        for r in roots: r.tangent = seed_dict[r]
-        for seed in one_hot_perms(self.shape):
-            self.tangent = seed
-            seed_dict[self] = seed
-            self.gradient = jvp(y, None, seed_dict)
-
-    # def grad_bwd(self):
-
     def add_parent(self, *args: tensor) -> None:
         self.parent.extend([arg for arg in args])
 
