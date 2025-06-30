@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import copy
 import math
 import operator
 from typing import Union
@@ -784,7 +786,7 @@ def _matmul(x1: list, x2: list) -> list:
     return [_matmul(x1, x2_i) for x2_i in x2]
 
 
-def jvp(f: tensor, inputs: None | dict[tensor, array], directions: dict[tensor, array]):
+def jvp(f: tensor, inputs: dict[tensor, array] | None, directions: dict[tensor, array] | None, push_forward: bool = False):
     """
     Calculate the JVP where J is the |inputs|x|output| Jacobian, V is the direction vector.
     The intermediate tangents are stored in tensor._tangent along the tensors on the way.\n
@@ -800,8 +802,13 @@ def jvp(f: tensor, inputs: None | dict[tensor, array], directions: dict[tensor, 
     :param inputs: The value of the roots
     :param directions: A vector of n elements to perform JVP with.
                       The linear combination of Jacobian columns you're interested in.
-    :return: None
+    :param push_forward:  If True, will also return a function that can be used to probe the Jacobian with different directions.
+
+    :return: tangent of f(evaluated at inputs) w.r.t roots(weighted by directions) and a function if push_forward
    """
+    if (directions is None) == (not push_forward):
+        raise ValueError('Provide either one of directions or push_forward')
+
     visited = set()
     order: list[tensor] = []
     roots: list[tensor] = []
@@ -809,11 +816,54 @@ def jvp(f: tensor, inputs: None | dict[tensor, array], directions: dict[tensor, 
     if len(roots) > len(directions) or (inputs is not None and len(roots) > len(inputs)):
         raise ValueError('Number of roots does not match with length of inputs/directions')
 
+    # Prop val
     if inputs is not None:
         for root in roots: root.arr = array(inputs[root])
         for t in order: t._prop_val()
+
+    # Don't prop tangent if push_forward
+    if push_forward:
+        def f_vjp(_directions):
+            for root in roots: root.tangent = array(_directions[root])
+            for t in order: t._prop_tan()
+            return f.tangent
+        return f_vjp
+
+    # Prop tangent
     for root in roots: root.tangent = array(directions[root])
     for t in order: t._prop_tan()
-
     return f.tangent
+
+
+def vjp(f: tensor, inputs: dict[tensor, array] | None, cotangent: array | None, pull_back: bool = False):
+    if (cotangent is None) == (not pull_back):
+        raise ValueError('Provide either one of cotangent or pull_back')
+    if cotangent.shape != f.shape:
+        raise ValueError('Cotangent shape does not match with output shape.')
+
+    visited = set()
+    order: list[tensor] = []
+    roots: list[tensor] = []
+    f.topo(visited, order, roots)
+    if inputs is not None and len(roots) > len(inputs):
+        raise ValueError('Number of roots does not match with length of inputs')
+
+    # Prop val
+    if inputs is not None:
+        for root in roots: root.arr = array(inputs[root])
+        for t in order: t._prop_val()
+
+    # Don't prop tangent if push_forward
+    if pull_back:
+        def pull_back(cotangent: array | None):
+            if cotangent.shape != f.shape: raise ValueError('Cotangent shape does not match with output shape.')
+            f.gradient = array(1.0, outer_shape=f.shape) if cotangent is None else cotangent
+            for t in reversed(order): t._prop_grad()
+            return {root: root.gradient for root in roots}
+        return pull_back
+
+    # Prop gradient
+    f.gradient = array(1.0, outer_shape=f.shape) if cotangent is None else cotangent
+    for t in reversed(order): t._prop_grad()
+    return {root: root.gradient for root in roots}
 
