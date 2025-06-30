@@ -468,6 +468,8 @@ class tensor:
         exp_tensor._prop_val = _prop_val
         def _prop_tan(): exp_tensor.tangent = self.tangent * exp_tensor.arr
         exp_tensor._prop_tan = _prop_tan
+        def _prop_grad(): self.gradient += exp_tensor.gradient * exp_tensor.arr
+        exp_tensor._prop_grad = _prop_grad
         return exp_tensor
 
     def log(self) -> tensor:
@@ -479,6 +481,8 @@ class tensor:
         log_tensor._prop_val = _prop_val
         def _prop_tan(): log_tensor.tangent = self.tangent / self.arr
         log_tensor._prop_tan = _prop_tan
+        def _prop_grad(): self.gradient += log_tensor.gradient / log_tensor.arr
+        log_tensor._prop_grad = _prop_grad
         return log_tensor
 
     def sin(self) -> tensor:
@@ -490,6 +494,8 @@ class tensor:
         sin_tensor._prop_val = _prop_val
         def _prop_tan(): sin_tensor.tangent = self.arr.cos() * self.tangent
         sin_tensor._prop_tan = _prop_tan
+        def _prop_grad(): self.gradient += sin_tensor.gradient * sin_tensor.arr.cos()
+        sin_tensor._prop_grad = _prop_grad
         return sin_tensor
 
     def cos(self) -> tensor:
@@ -501,6 +507,8 @@ class tensor:
         cos_tensor._prop_val = _prop_val
         def _prop_tan(): cos_tensor.tangent = -self.arr.sin() * self.tangent
         cos_tensor._prop_tan = _prop_tan
+        def _prop_grad(): self.gradient += - (cos_tensor.gradient / cos_tensor.arr.sin())
+        cos_tensor._prop_grad = _prop_grad
         return cos_tensor
 
     def pow(self, p: Number) -> tensor:
