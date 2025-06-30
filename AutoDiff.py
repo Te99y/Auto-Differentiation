@@ -65,7 +65,7 @@ class array:
             raise ValueError('How did you even get here?')
 
     def flatten(self) -> array:
-        return array(_flatten(self.value))
+        return array(flatten(self.value))
 
     def transpose(self) -> array:
         return array(transpose(self.value))
@@ -587,19 +587,11 @@ def flatten(v: ListLike) -> ListLike:
     """
     This is a wrapper function
     """
-    if isinstance(v, list): return _flatten(v)
+    if isinstance(v, list):
+        while isinstance(v[0], list): v = sum(v, [])
+        return v
     if isinstance(v, array | tensor): return v.flatten()
     else: raise ValueError(f'Input must be list|array|tensor, get {type(v)}')
-
-
-def _flatten(v: list) -> list:
-    """
-    This function does not validate whether the input is homogeneous.
-    Incompatible shape may produce unexpected output.
-    """
-    while isinstance(v[0], list):
-        v = sum(v, [])
-    return v
 
 
 def transpose(v: ListLike) -> ListLike:
