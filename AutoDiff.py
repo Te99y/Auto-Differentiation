@@ -5,6 +5,7 @@ import math
 import operator
 from typing import Union
 from copy import deepcopy
+import itertools
 
 Number = Union[int | float]
 ListLike = Union['array', 'tensor', list]
@@ -19,7 +20,7 @@ class array:
     """
     def __init__(self, init_value: Number | ListLike, outer_shape: list | tuple = ()) -> None:
         self.shape: tuple
-        self.value: list
+        self.value: list[list | Number]
         outer_shape = tuple(outer_shape)
         if isinstance(init_value, tensor):
             self.shape = deepcopy(init_value.arr.shape)
@@ -65,19 +66,26 @@ class array:
             raise ValueError('How did you even get here?')
 
     def flatten(self) -> array:
-        return array(flatten(self.value))
+        res = array(0)
+        res.value = flatten(self.value)
+        res.update_shape()
+        return res
+
+    def swapaxes(self, axis1, axis2) -> array:
+        res = array(0)
+        res.value = swapaxes(self.value, axis1, axis2)
+        res.update_shape()
+        return res
 
     def transpose(self) -> array:
-        return array(transpose(self.value))
+        res = array(0)
+        res.value = transpose(self.value)
+        res.update_shape()
+        return res
 
     def update_shape(self) -> tuple:
-        arr = self.value
-        shape = ()
-        while isinstance(arr, list):
-            shape += (len(arr),)
-            arr = arr[0]
-        self.shape = shape
-        return shape
+        self.shape = check_shape(self.value)
+        return self.shape
 
     def broadcast_with(self, other: Number | ListLike) -> tuple:
         """
@@ -229,7 +237,7 @@ class tensor:
     TENSOR_MAP: list[tensor] = []
 
     def __init__(self,
-                 value: Number | list | array | tensor,
+                 value: Number | ListLike,
                  op_name: str = '   ',
                  requires_grad: bool = True,
                  is_leaf: bool = True):
@@ -241,8 +249,8 @@ class tensor:
         self.tag = len(tensor.TENSOR_MAP)
         self.child: list[tensor] = []
         self.parent: list[tensor] = []
-        self.tangent = array(0)
-        self.gradient = array(0)
+        self.tangent: array = array(0)
+        self.gradient: array = array(0)
         self._prop_tan = lambda: None  # default do nothing
         self._prop_val = lambda: None  # default do nothing
         self._prop_grad = lambda: None  # default do nothing
@@ -258,6 +266,38 @@ class tensor:
             roots.append(self)
         order.append(self)
         visited.add(self)
+
+    def fix_broadcast_grad(self, incoming_grad) -> array:
+        original_shape = self.shape
+        broadcast_shape = incoming_grad.shape
+        if original_shape == broadcast_shape:
+            return incoming_grad
+
+        # pad with 0 to indicate broadcast
+        padded_ori_shape = (0, )*(len(broadcast_shape) - len(original_shape)) + original_shape
+        v_grad = incoming_grad.value
+        # print(f'fixing for {self.tag}')
+        # print(padded_ori_shape, broadcast_shape)
+        for original_s, broadcast_s in zip(padded_ori_shape, broadcast_shape):
+            # print(f'ori:{original_s}, incom:{broadcast_s}')
+            if original_s != broadcast_s:
+                # print(f'before: {v_grad}')
+                for next_grad in v_grad[1:]:
+                    v_grad[0] = binary_elementwise(v_grad[0], next_grad, operator.add)
+                v_grad = v_grad[0]
+                # print(f'after: {v_grad}')
+        res = array(0)
+        res.value = v_grad
+        res.shape = original_shape
+        return res
+
+
+    def zero_grad(self):
+        visited = set()
+        order, roots = [], []
+        self.topo(visited, order, roots)
+        for t in order:
+            t.gradient = array(0)
 
     def add_parent(self, *args: tensor) -> None:
         self.parent.extend([arg for arg in args])
@@ -278,8 +318,9 @@ class tensor:
         child_description = [(child.op_name, child.tag) for child in self.child]
         return f'{self.tag} | op:{self.op_name} | parent:{parent_description} | child:{child_description} | ' \
                f'shape:{self.arr.shape}' \
-               f'\n    val:{self.arr}' \
-               f'\n    tan:{self.tangent}'
+               f'\n    val : {self.arr}' \
+               f'\n    tan : {self.tangent}' \
+               f'\n    grad: {self.gradient}'
 
     def __add__(self, other) -> tensor:
         other_tensor = other if isinstance(other, tensor) else tensor.const_tensor(other)
@@ -295,8 +336,8 @@ class tensor:
         def _prop_tan(): add_tensor.tangent = self.tangent + other_tensor.tangent
         add_tensor._prop_tan = _prop_tan
         def _prop_grad():
-            self.gradient += add_tensor.gradient * 1.0
-            other_tensor.gradient += add_tensor.gradient * 1.0
+            self.gradient += self.fix_broadcast_grad(add_tensor.gradient * 1.0)
+            other_tensor.gradient += other_tensor.fix_broadcast_grad(add_tensor.gradient * 1.0)
         add_tensor._prop_grad = _prop_grad
         return add_tensor
 
@@ -323,8 +364,8 @@ class tensor:
         def _prop_tan(): sub_tensor.tangent = self.tangent - other_tensor.tangent
         sub_tensor._prop_tan = _prop_tan
         def _prop_grad():
-            self.gradient += sub_tensor.gradient * 1.0
-            other_tensor.gradient += sub_tensor.gradient * -1.0
+            self.gradient += self.fix_broadcast_grad(sub_tensor.gradient * 1.0)
+            other_tensor.gradient += other_tensor.fix_broadcast_grad(sub_tensor.gradient * -1.0)
         sub_tensor._prop_grad = _prop_grad
         return sub_tensor
 
@@ -378,8 +419,8 @@ class tensor:
         def _prop_tan(): mul_tensor.tangent = other_tensor.arr * self.tangent + self.arr * other_tensor.tangent
         mul_tensor._prop_tan = _prop_tan
         def _prop_grad():
-            self.gradient += mul_tensor.gradient * other_tensor.arr
-            other_tensor.gradient += mul_tensor.gradient * self.arr
+            self.gradient += self.fix_broadcast_grad(mul_tensor.gradient * other_tensor.arr)
+            other_tensor.gradient += other_tensor.fix_broadcast_grad(mul_tensor.gradient * self.arr)
         mul_tensor._prop_grad = _prop_grad
         return mul_tensor
 
@@ -408,8 +449,9 @@ class tensor:
             div_tensor.tangent = one_over_b * (self.tangent - self.arr * one_over_b * other_tensor.tangent)
         div_tensor._prop_tan = _prop_tan
         def _prop_grad():
-            self.gradient += div_tensor.gradient / other_tensor.arr
-            other_tensor.gradient += div_tensor.gradient * self.arr
+            G_over_b = div_tensor.gradient / other_tensor.arr
+            self.gradient += self.fix_broadcast_grad(G_over_b)
+            other_tensor.gradient += other_tensor.fix_broadcast_grad(-G_over_b * self.arr / other_tensor.arr)
         div_tensor._prop_grad = _prop_grad
         return div_tensor
 
@@ -437,8 +479,8 @@ class tensor:
         def _prop_tan(): matmul_tensor.tangent = self.tangent * other_tensor.arr + self.arr * other_tensor.tangent
         matmul_tensor._prop_tan = _prop_tan
         def _prop_grad():
-            self.gradient += matmul_tensor.gradient @ transpose(self.arr)
-            other_tensor.gradient += transpose(other_tensor.arr) @ matmul_tensor.gradient
+            self.gradient += self.fix_broadcast_grad(matmul_tensor.gradient @ other_tensor.arr.swapaxes(-1, -2))
+            other_tensor.gradient += other_tensor.fix_broadcast_grad(self.arr.swapaxes(-1, -2) @ matmul_tensor.gradient)
         matmul_tensor._prop_grad = _prop_grad
         return matmul_tensor
 
@@ -481,7 +523,8 @@ class tensor:
         log_tensor._prop_val = _prop_val
         def _prop_tan(): log_tensor.tangent = self.tangent / self.arr
         log_tensor._prop_tan = _prop_tan
-        def _prop_grad(): self.gradient += log_tensor.gradient / log_tensor.arr
+        def _prop_grad():
+            self.gradient += log_tensor.gradient / self.arr
         log_tensor._prop_grad = _prop_grad
         return log_tensor
 
@@ -494,7 +537,7 @@ class tensor:
         sin_tensor._prop_val = _prop_val
         def _prop_tan(): sin_tensor.tangent = self.arr.cos() * self.tangent
         sin_tensor._prop_tan = _prop_tan
-        def _prop_grad(): self.gradient += sin_tensor.gradient * sin_tensor.arr.cos()
+        def _prop_grad(): self.gradient += sin_tensor.gradient * self.arr.cos()
         sin_tensor._prop_grad = _prop_grad
         return sin_tensor
 
@@ -507,7 +550,7 @@ class tensor:
         cos_tensor._prop_val = _prop_val
         def _prop_tan(): cos_tensor.tangent = -self.arr.sin() * self.tangent
         cos_tensor._prop_tan = _prop_tan
-        def _prop_grad(): self.gradient += - (cos_tensor.gradient / cos_tensor.arr.sin())
+        def _prop_grad(): self.gradient += - (cos_tensor.gradient * self.arr.sin())
         cos_tensor._prop_grad = _prop_grad
         return cos_tensor
 
@@ -593,13 +636,62 @@ def identity(shape: int) -> float | array:
 
 def flatten(v: ListLike) -> ListLike:
     """
-    This is a wrapper function
+    This function does not validate whether the input is homogeneous.
+    Incompatible shape may produce unexpected output.
     """
     if isinstance(v, list):
-        while isinstance(v[0], list): v = sum(v, [])
-        return v
+        shape = check_shape(v)
+        res = []
+        for tuple_i in itertools.product(*(range(s) for s in shape[:-1])):
+            src = v
+            for i in tuple_i:
+                src = src[i]
+            res.extend(src)
+        return res
     if isinstance(v, array | tensor): return v.flatten()
     else: raise ValueError(f'Input must be list|array|tensor, get {type(v)}')
+
+
+def swapaxes(v: list, axis1: int, axis2: int) -> list:
+    """
+    What it does:
+    Transform axis1, axis2 to 0~len(v.shape).
+        ex: -1 -> len(v.shape)-1
+    Trim the shape to desired precision.
+        ex: shape=(2, 3, 4, 5), axis1=0, axis2=1 -> trimmed_shape=(2, 3)
+        explanation: For v.shape=(2, 3, 4, 5), if the shape after swapping is (3, 2, 4, 5),
+        we don't need to change anything after (2, 3), they remain to be lists of shape (4, 5),
+        so we'll just copy them as a whole
+        The flattening of v allow
+    Build res as the placeholder for result list.
+        ex: trimmed_shape=(2, 3) axis1=0, axis2=1 -> new_shape=(3, 2), res=[[[], []], [[], []], [[], []]]
+    """
+    shape = check_shape(v)
+    dep = len(shape)
+    if abs(axis1) > dep or abs(axis2) > dep:
+        raise ValueError(f'At least one of the axes out of bound. Either {axis1} or {axis2} > {dep} depth of v.')
+
+    axis1 = dep + axis1 if axis1 < 0 else axis1
+    axis2 = dep + axis2 if axis2 < 0 else axis2
+    trimmed_shape = shape[:max(axis1, axis2) + 1]
+
+    new_shape = list(trimmed_shape)
+    new_shape[axis1], new_shape[axis2] = new_shape[axis2], new_shape[axis1]
+    res = []
+    for s in reversed(new_shape):
+        res = [copy.deepcopy(res) for _ in range(s)]
+
+    for src in itertools.product(*(range(s) for s in trimmed_shape)):
+        dst = list(src)
+        dst[axis1], dst[axis2] = dst[axis2], dst[axis1]
+        dst_p = res
+        src_p = v
+        for i, j in zip(src[:-1], dst[:-1]):
+            src_p = src_p[i]
+            dst_p = dst_p[j]
+        dst_p[dst[-1]] = copy.copy(src_p[src[-1]])
+
+    return res
 
 
 def transpose(v: ListLike) -> ListLike:
@@ -802,11 +894,11 @@ def jvp(f: tensor, inputs: dict[tensor, array] | None, directions: dict[tensor, 
 
     # Don't prop tangent if push_forward
     if push_forward:
-        def f_vjp(_directions):
+        def f_jvp(_directions):
             for root in roots: root.tangent = array(_directions[root])
             for t in order: t._prop_tan()
             return f.tangent
-        return f_vjp
+        return f_jvp
 
     # Prop tangent
     for root in roots: root.tangent = array(directions[root])
@@ -818,7 +910,7 @@ def vjp(f: tensor, inputs: dict[tensor, array] | None, cotangent: array | None, 
     if (cotangent is None) == (not pull_back):
         raise ValueError('Provide either one of cotangent or pull_back')
     if cotangent.shape != f.shape:
-        raise ValueError('Cotangent shape does not match with output shape.')
+        raise ValueError(f'Cotangent shape {cotangent.shape} does not match with output shape {f.shape}.')
 
     visited = set()
     order: list[tensor] = []
@@ -834,15 +926,16 @@ def vjp(f: tensor, inputs: dict[tensor, array] | None, cotangent: array | None, 
 
     # Don't prop tangent if push_forward
     if pull_back:
-        def pull_back(cotangent: array | None):
+        def f_vjp(cotangent: array | None):
             if cotangent.shape != f.shape: raise ValueError('Cotangent shape does not match with output shape.')
             f.gradient = array(1.0, outer_shape=f.shape) if cotangent is None else cotangent
             for t in reversed(order): t._prop_grad()
             return {root: root.gradient for root in roots}
-        return pull_back
+        return f_vjp
 
     # Prop gradient
     f.gradient = array(1.0, outer_shape=f.shape) if cotangent is None else cotangent
-    for t in reversed(order): t._prop_grad()
+    for t in reversed(order):
+        # print(t.tag)
+        t._prop_grad()
     return {root: root.gradient for root in roots}
-
