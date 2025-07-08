@@ -14,7 +14,18 @@ if __name__ == '__main__':
     #     seed_dict[t1] = seed
     #     print(ad.jvp(y, None, seed_dict))
 
-    a = ad.array([1, -2, -3], outer_shape=(4, 3, 2)).value
-    # a = [1, 2, 1, 2, 3]
-    b = [10, 2, 3]
-    print(ad.transpose(a) == np.transpose(a).tolist())
+    a = np.arange(2*3*4).reshape((1, 2, 3, 4))
+    # a = np.array([[[[0], [1]], [[2], [3]], [[4], [5]]], [[[0], [1]], [[2], [3]], [[4], [5]]]])
+    # a = np.array([[[[1, 2, 3]]]])
+    a_np = a.flatten()
+    a_ad = ad.flatten(a.tolist())
+    # aT = np.swapaxes(a, -1, -3)
+    # a = np.random.randint(low=0, high=5, size=(1, 2, 3, 4))
+
+    print()
+    print(a.shape)
+    print(a_np.shape)
+    print(a_np.tolist())
+    # print(a_np.flatten())
+    print(a_ad)
+    print(a_np.tolist() == a_ad)
