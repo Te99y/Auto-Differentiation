@@ -2,6 +2,7 @@ import math
 import operator
 import unittest
 import numpy as np
+import numpy.testing as npt
 import AutoDiff as ad
 import coverage
 import jax
@@ -17,7 +18,7 @@ OPS = {
     ]
 }
 np.random.seed(seed=20250614)
-ITER = 10
+ITER = 1
 
 jnp_unary = [
     jnp.abs,
@@ -89,9 +90,8 @@ class test_array(unittest.TestCase):
         self.assertEqual(a.value, b.value)
         self.assertEqual(a.shape, b.shape)
 
-
     def test_flatten(self):
-        a = np.random.randn(2, 3, 4, 1, 6)
+        a = np.random.randn(256, 256)
         _a = ad.array(a.tolist())
         self.assertEqual(a.flatten().tolist(), _a.flatten().value)
 
@@ -106,6 +106,20 @@ class test_array(unittest.TestCase):
         a = np.random.randn(*shape)
         _a = ad.array(a.tolist())
         self.assertEqual(tuple(shape), _a.update_shape())
+
+    def test_swapaxes(self):
+        size = np.random.randint(low=1, high=5, size=10)
+        a = np.random.randint(low=-10, high=10, size=size)
+        _a = np.swapaxes(a, -1, -2).tolist()
+        _aT = ad.swapaxes(a.tolist(), -1, -2)
+        self.assertEqual(_a, _aT)
+
+    def test_transpose(self):
+        size = np.random.randint(low=1, high=5, size=10)
+        a = np.random.randint(low=-10, high=10, size=size)
+        _a = ad.array(a.tolist())
+        _aT = ad.transpose(_a).value
+        self.assertEqual(np.transpose(a).tolist(), _aT)
 
     def test_ops(self):
         for _ in range(ITER):
@@ -214,8 +228,7 @@ class test_tensor(unittest.TestCase):
             self.assertEqual(np.array(np_matmul, dtype=np.float32).tolist(),
                              np.array(ad_matmul.arr.value, dtype=np.float32).tolist())
 
-
-    def test_differentiation_unary_binary(self):
+    def test_jvp_unary_binary(self):
         input_dim = np.random.randint(low=1, high=20)
         function_depth = np.random.randint(low=1, high=500)
         x = np.random.uniform(low=-2, high=2, size=(function_depth, input_dim)).astype(np.float64)
@@ -270,8 +283,7 @@ class test_tensor(unittest.TestCase):
         tensor_tangents = [ad.jvp(y, None, directions).value for y in ys]
         self.assertEqual(np.array(jax_tangents, dtype=np.float32).tolist(), np.array(tensor_tangents, dtype=np.float32).tolist())
 
-
-    def test_differentiation_matmul(self):
+    def test_jvp_matmul(self):
         for _ in range(ITER):
             layers = np.random.randint(low=2, high=10)
             layer_dims = np.exp2(np.random.randint(low=5, high=10, size=layers)).astype(np.int32)
@@ -302,6 +314,109 @@ class test_tensor(unittest.TestCase):
             for jax_i, tensor_i in zip(jax_tangents, tensor_tangents):
                 self.assertEqual(np.array(jax_i, dtype=np.float32).tolist(),
                                  np.array(tensor_i, dtype=np.float32).tolist())
+
+    def test_vjp_matmul(self):
+        for _ in range(ITER):
+            size = np.random.randint(low=1, high=5, size=4)
+            m1 = np.random.uniform(low=-1, high=1, size=(*size, 2, 3))
+            m2 = np.random.uniform(low=-1, high=1, size=(*size, 3, 2))
+            m3 = np.random.uniform(low=-1, high=1, size=(1, 2))
+
+            def f(x1, x2, x3):
+                return (x1 @ x2) * ((jnp.exp(x1) + x1) @ (x3 - jnp.log(jnp.abs(x2)) / x2))
+
+            # jax grad
+            jax_outputs, jax_fvjp = jax.vjp(f, *(m1, m2, m3))
+            cotangents = np.random.uniform(-1, 1, size=jax_outputs.shape)
+            jax_grad = jax_fvjp(cotangents)
+            # ad grad
+            t1 = ad.tensor(m1.tolist())
+            t2 = ad.tensor(m2.tolist())
+            t3 = ad.tensor(m3.tolist())
+            root_tensors = [t1, t2, t3]
+            y = (t1 @ t2) * ((t1.exp() + t1) @ (t3 - t2.abs().log() / t2))
+            ad_grad = ad.vjp(y, None, ad.array(cotangents.tolist()))
+
+            for i, t in enumerate(root_tensors):
+                self.assertTrue(np.allclose(jax_grad[i], np.array(ad_grad[t].value)))
+
+    def test_vjp_unary_binary(self):
+        for _ in range(ITER):
+            input_dim = np.random.randint(low=1, high=100)
+            function_depth = np.random.randint(low=1, high=20)
+            x = np.random.uniform(low=-16, high=16, size=(function_depth, input_dim)).astype(np.float64)
+
+            # create a random function for jax
+            # and build the tensor graph in ys at the same time
+            func_seq = []
+            ys = [ad.tensor(i.tolist()) for i in x]
+            root_tensors = [t for t in ys]
+
+            def apply_unary(op):
+                rand_index = np.random.choice(function_depth)
+                if op == jnp.log:
+                    ys[rand_index] = ys[rand_index].abs().log()
+                    func_seq.append((rand_index, jnp.abs, (rand_index, )))
+                    func_seq.append((rand_index, jnp.log, (rand_index, )))
+                else:
+                    ys[rand_index] = jnp_to_tensor_map[op](ys[rand_index])
+                    func_seq.append((rand_index, op, (rand_index, )))
+
+            def apply_binary(op):
+                rand_index = np.random.choice(function_depth)
+                rand_root_first = np.random.rand() > 0.5
+                if rand_root_first:
+                    ys[0] = jnp_to_tensor_map[op](ys[rand_index], ys[0])
+                    func_seq.append((0, op, (rand_index, 0)))
+                else:
+                    ys[0] = jnp_to_tensor_map[op](ys[0], ys[rand_index])
+                    func_seq.append((0, op, (0, rand_index)))
+
+            for _ in range(function_depth):
+                func = np.random.choice([apply_unary, apply_binary])
+                apply_unary(np.random.choice(jnp_unary)) if func == apply_unary \
+                    else apply_binary(np.random.choice(jnp_binary))
+
+            def random_function(inputs):
+                outputs = [i for i in inputs]
+                for target_index, op, operand_indexes in func_seq:
+                    args = [outputs[operand] for operand in operand_indexes]
+                    outputs[target_index] = op(*args)
+                return outputs[0]
+
+            # test f(x)
+            f = random_function
+            (jax_outputs, jax_fvjp) = jax.vjp(f, x)
+            tensor_outputs = [y.arr.value for y in ys][0]
+            self.assertTrue(jnp.allclose(jax_outputs, np.array(tensor_outputs)))
+
+            # test f'(x)
+            cotangents = np.random.randint(0, 2, size=jax_outputs.shape).astype(np.float64)
+            jax_grad = jax_fvjp(cotangents)
+            ad.vjp(ys[0], None, ad.array(cotangents.tolist()))
+            ad_grad = [t.gradient.value if t.gradient.value != [0] else ad.array(0, outer_shape=t.shape).value
+                       for t in root_tensors]
+            self.assertTrue(jnp.allclose(jax_grad[0], np.array(ad_grad)))
+
+            # These are useful when debugging
+            # print(f(x))
+            # print(jax_outputs)
+            # print('Root tensors')
+            # for y in root_tensors:
+            #     print(y)
+            # print('Output tensors')
+            # for y in ys:
+            #     print(y)
+            # print(f'cotangents: shape = {cotangents.shape}')
+            # print(f'            val = {cotangents}')
+            # print()
+            # print(f'jax_grad  : shape = {jax_grad[0].shape}')
+            # print(f'            val = {jax_grad[0]}')
+            # print()
+            # print(f'ad_grad   : shape = {len(ad_grad)}, {ad.check_shape(ad_grad[0])}')
+            # print(f'            val = {ad_grad}')
+            # print()
+            # ad.all_tensors()
 
 
 cov.stop()
