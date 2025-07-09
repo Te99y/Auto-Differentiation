@@ -662,9 +662,9 @@ def swapaxes(v: list, axis1: int, axis2: int) -> list:
         explanation: For v.shape=(2, 3, 4, 5), if the shape after swapping is (3, 2, 4, 5),
         we don't need to change anything after (2, 3), they remain to be lists of shape (4, 5),
         so we'll just copy them as a whole
-        The flattening of v allow
     Build res as the placeholder for result list.
         ex: trimmed_shape=(2, 3) axis1=0, axis2=1 -> new_shape=(3, 2), res=[[[], []], [[], []], [[], []]]
+    Copy elements from v to res using the product of indexes(all possible combinations)
     """
     shape = check_shape(v)
     dep = len(shape)
@@ -924,7 +924,7 @@ def vjp(f: tensor, inputs: dict[tensor, array] | None, cotangent: array | None, 
         for root in roots: root.arr = array(inputs[root])
         for t in order: t._prop_val()
 
-    # Don't prop tangent if push_forward
+    # Don't prop grad if pull_back
     if pull_back:
         def f_vjp(cotangent: array | None):
             if cotangent.shape != f.shape: raise ValueError('Cotangent shape does not match with output shape.')
@@ -936,6 +936,7 @@ def vjp(f: tensor, inputs: dict[tensor, array] | None, cotangent: array | None, 
     # Prop gradient
     f.gradient = array(1.0, outer_shape=f.shape) if cotangent is None else cotangent
     for t in reversed(order):
-        # print(t.tag)
         t._prop_grad()
+        if not t.is_leaf:
+            t.gradient = array(0)
     return {root: root.gradient for root in roots}
