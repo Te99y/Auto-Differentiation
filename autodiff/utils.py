@@ -14,18 +14,18 @@ def sign(v: Number) -> float:
 
 def depth(v: list | Number) -> int:
     cnt = 0
-    while isinstance(v, list):
+    while isinstance(v, list) and v:
         v = v[0]
         cnt += 1
     return cnt
 
 
 def check_shape_list(v: list) -> tuple[int, ...]:
-    res = (len(v),)
-    while isinstance(v[0], list):
-        res += (len(v[0]),)
-        v = v[0]
-    return res
+    if not v:  # v = []
+        return (0, )
+    if isinstance(v[0], list):
+        return (len(v), ) + check_shape_list(v[0])
+    return (len(v), )
 
 
 def broadcast(shape1: tuple[int, ...], shape2: tuple[int, ...]) -> tuple[int, ...]:
@@ -42,10 +42,10 @@ def broadcast(shape1: tuple[int, ...], shape2: tuple[int, ...]) -> tuple[int, ..
     return shape2[:-len(shape1)] + tuple(reversed(res_shape))
 
 
-def unary_elementwise_list(x: list, op: Callable[[Number], Number]) -> list:
-    if not isinstance(x[0], list):
-        return [op(x_i) for x_i in x]
-    return [unary_elementwise_list(x_i, op) for x_i in x]
+def unary_elementwise_list(v: list, op: Callable[[Number], Number]) -> list:
+    if not isinstance(v[0], list):
+        return [op(v_i) for v_i in v]
+    return [unary_elementwise_list(v_i, op) for v_i in v]
 
 
 def binary_elementwise_list(v1: list, v2: list, op: Callable[[Number, Number], Number]) -> list:
@@ -68,23 +68,26 @@ def reshape_list(v: list, shape: tuple[int, ...]) -> list:
     same_subshape_len = next((i for i, (x, y) in enumerate(zip(reversed(old_shape), reversed(shape))) if x != y), 0)
 
     v = flatten_list(v, max(len(old_shape) - same_subshape_len - 1, 0))  # ex:(2,3,4,5,6)->(3,8,5,6) flatten to (24,5,6)
-    for s in reversed(shape[:-same_subshape_len]):
+    for s in reversed(shape[same_subshape_len:]):
         v = [[v[i+j] for j in range(s)] for i in range(0, len(v), s)]
 
     return sum(v, [])  # remove the extra layer
 
 
-def flatten_list(v: list, depth: int = -1) -> list[Number]:
+def flatten_list(v: list, layers: int = -1) -> list[Number]:
     """
     Flatten an nd-list into a 1D list.
     Does not validate homogeneity.
     """
     shape = check_shape_list(v)
-    if len(shape) < abs(depth):
+    if len(shape) == 1 and layers == -1:  # v already is 1D
+        return v
+
+    if len(shape)-1 < abs(layers):
         raise ValueError('depth out of bound; depth must be less then the length of the shape')
 
     res: list[Number] = []
-    for idx in itertools.product(*(range(s) for s in shape[:depth])):
+    for idx in itertools.product(*(range(s) for s in shape[:layers])):
         src = v
         for i in idx:
             src = src[i]
@@ -95,9 +98,12 @@ def flatten_list(v: list, depth: int = -1) -> list[Number]:
 
 def swapaxes_list(v: list, axis1: int, axis2: int) -> list:
     shape = check_shape_list(v)
-    dep = len(shape)
-    if abs(axis1) > dep or abs(axis2) > dep:
+    dep = depth(v)
+    if abs(axis1) >= dep or abs(axis2) >= dep:
         raise ValueError(f'Axis out of bounds: {axis1}, {axis2} for depth {dep}')
+
+    if axis1 == axis2:
+        return v
 
     axis1 = dep + axis1 if axis1 < 0 else axis1
     axis2 = dep + axis2 if axis2 < 0 else axis2
@@ -138,17 +144,17 @@ def transpose_list(v: list) -> list:
     return vv[0]
 
 
-def matmul_list(x1: list, x2: list) -> list:
-    d1, d2 = depth(x1), depth(x2)
+def matmul_list(v1: list, v2: list) -> list:
+    d1, d2 = depth(v1), depth(v2)
     if d1 <= 2 and d2 <= 2:
-        x1m = x1 if isinstance(x1[0], list) else [x1]
-        x2m = x2 if isinstance(x2[0], list) else [x2]
-        return [[sum(binary_elementwise_list(row, [x2_row[m] for x2_row in x2m], operator.mul))
-                 for m in range(len(x2m[0]))]
-                for row in x1m]
+        v1m = v1 if isinstance(v1[0], list) else [v1]
+        v2m = v2 if isinstance(v2[0], list) else [v2]
+        return [[sum(binary_elementwise_list(row, [v2_row[m] for v2_row in v2m], operator.mul))
+                 for m in range(len(v2m[0]))]
+                for row in v1m]
     if d1 == d2:
-        return [matmul_list(x1[min(i, len(x1)-1)], x2[min(i, len(x2)-1)])
-                for i in range(max(len(x1), len(x2)))]
+        return [matmul_list(v1[min(i, len(v1)-1)], v2[min(i, len(v2)-1)])
+                for i in range(max(len(v1), len(v2)))]
     if d1 > d2:
-        return [matmul_list(x1_i, x2) for x1_i in x1]
-    return [matmul_list(x1, x2_i) for x2_i in x2]
+        return [matmul_list(v1_i, v2) for v1_i in v1]
+    return [matmul_list(v1, v2_i) for v2_i in v2]
