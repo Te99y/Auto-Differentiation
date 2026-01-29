@@ -71,7 +71,7 @@ def test_unary_elementwise() -> None:
     assert unary_elementwise_list(v, math.cos) == reshape_list(list(map(math.cos, flatten_list(v))), (3, 1, 2, 2))
     assert unary_elementwise_list(v, operator.abs) == reshape_list(list(map(operator.abs, flatten_list(v))), (3, 1, 2, 2))
     with pytest.raises(ValueError):
-        unary_elementwise_list([-0.1, 0,2], math.log)
+        unary_elementwise_list([-0.1, 0.2], math.log)
 
 
 def test_binary_elementwise() -> None:
@@ -129,7 +129,7 @@ def test_flatten_invalid() -> None:
         flatten_list([[[1, 2, 3], [1, 2, 3]], [[1, 2, 3], [1, 2, 3]]], layers=3)
 
 
-def test_wapaxes():
+def test_swapaxes():
     assert swapaxes_list([[1]], 0, 0) == [[1]]
     assert swapaxes_list([[1]], 0, 1) == [[1]]
     assert swapaxes_list([[1, 2], [3, 4]], 0, 1) == [[1, 3], [2, 4]]
@@ -171,7 +171,6 @@ def test_transpose_invalid() -> None:
 
 def test_matmul():
     assert matmul_list([[1, 2]], [[3], [4]]) == [[11]]  # (1, 2)@(2, 1)
-    assert matmul_list([[3], [4]], [[1, 2]]) == [[3, 6], [4, 8]]  # (2, 1)@(1, 2)
     assert matmul_list([[3], [4]], [[1, 2]]) == [[3, 6], [4, 8]]  # (2, 1)@(1, 2)
     v1 = array([[[1.123, -2.234, 3.345], [-4.456, 5.567, -6.678]]], outer_shape=(2, 1)).value
     v2 = swapaxes_list(v1, -1, -2)
