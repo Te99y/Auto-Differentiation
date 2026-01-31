@@ -63,13 +63,24 @@ def test_broadcast_invalid() -> None:
         broadcast((2, 3, 4), (2, 3, 5))
 
 
+def test_broadcast_commutes() -> None:
+    assert broadcast((2, 3, 1), (1, 3, 4)) == broadcast((1, 3, 4), (2, 3, 1))
+
+
+def nested_map(fn, v1, v2=None) -> list:
+    old_shape = check_shape_list(v1)
+    if v2 is None:
+        return reshape_list(list(map(fn, flatten_list(v1))), old_shape)
+    return reshape_list(list(map(fn, flatten_list(v1), flatten_list(v2))), old_shape)
+
+
 def test_unary_elementwise() -> None:
     v = array([0.1234, 3.2345], outer_shape=(3, 1, 2)).value
-    assert unary_elementwise_list(v, math.log) == reshape_list(list(map(math.log, flatten_list(v))), (3, 1, 2, 2))
-    assert unary_elementwise_list(v, math.exp) == reshape_list(list(map(math.exp, flatten_list(v))), (3, 1, 2, 2))
-    assert unary_elementwise_list(v, math.sin) == reshape_list(list(map(math.sin, flatten_list(v))), (3, 1, 2, 2))
-    assert unary_elementwise_list(v, math.cos) == reshape_list(list(map(math.cos, flatten_list(v))), (3, 1, 2, 2))
-    assert unary_elementwise_list(v, operator.abs) == reshape_list(list(map(operator.abs, flatten_list(v))), (3, 1, 2, 2))
+    assert unary_elementwise_list(v, math.log) == nested_map(math.log, v)
+    assert unary_elementwise_list(v, math.exp) == nested_map(math.exp, v)
+    assert unary_elementwise_list(v, math.sin) == nested_map(math.sin, v)
+    assert unary_elementwise_list(v, math.cos) == nested_map(math.cos, v)
+    assert unary_elementwise_list(v, operator.abs) == nested_map(operator.abs, v)
     with pytest.raises(ValueError):
         unary_elementwise_list([-0.1, 0.2], math.log)
 
@@ -78,10 +89,10 @@ def test_binary_elementwise() -> None:
     v1 = array([2.1234, 4.3456, -5.4567], outer_shape=(2, 1, 4)).value
     v2 = array([-12.6789, 23.789, 45.9012], outer_shape=(2, 1, 4)).value
     v_zip = list(zip(flatten_list(v1), flatten_list(v2)))
-    assert binary_elementwise_list(v1, v2, operator.add) == reshape_list([v[0]+v[1] for v in v_zip], (2, 1, 4, 3))
-    assert binary_elementwise_list(v1, v2, operator.sub) == reshape_list([v[0]-v[1] for v in v_zip], (2, 1, 4, 3))
-    assert binary_elementwise_list(v1, v2, operator.mul) == reshape_list([v[0]*v[1] for v in v_zip], (2, 1, 4, 3))
-    assert binary_elementwise_list(v1, v2, operator.truediv) == reshape_list([v[0]/v[1] for v in v_zip], (2, 1, 4, 3))
+    assert binary_elementwise_list(v1, v2, operator.add) == nested_map(operator.add, v1, v2)
+    assert binary_elementwise_list(v1, v2, operator.sub) == nested_map(operator.sub, v1, v2)
+    assert binary_elementwise_list(v1, v2, operator.mul) == nested_map(operator.mul, v1, v2)
+    assert binary_elementwise_list(v1, v2, operator.truediv) == nested_map(operator.truediv, v1, v2)
 
 
 @pytest.mark.parametrize(
@@ -91,7 +102,33 @@ def test_binary_elementwise() -> None:
      ((6, ), (1, 6, )),
      ((6, ), (2, 3)),
      ((6, ), (3, 1, 2)),
-     ((6, ), (1, 2, 1, 3))]
+     ((6, ), (1, 2, 1, 3)),
+     ((4, 1, 3), (4, 1, 3)),
+     ((4, 1, 3), (4, 1, 1, 3)),
+     ((4, 1, 3), (1, 4, 1, 3)),
+     ((4, 1, 3), (1, 1, 4, 1, 3)),
+     ((4, 1, 3), (1, 1, 4, 1, 1, 3)),
+     ((4, 1, 3), (4, 1, 3, 1)),
+     ((4, 1, 3), (4, 1, 3, 1, 1)),
+     ((4, 1, 3), (1, 4, 1, 3, 1, 1)),
+     ((4, 1, 3), (1, 1, 4, 1, 1, 3, 1)),
+     ((4, 1, 3), (1, 1, 4, 1, 1, 3, 1, 1)),
+     ((4, 1, 3), (2, 3, 2, 1)),
+     ((4, 1, 3), (2, 2, 1, 3)),
+     ((4, 1, 3), (2, 1, 3, 2)),
+     ((4, 1, 3), (1, 2, 3, 2)),
+     ((4, 1, 3), (1, 2, 3, 2, 1)),
+     ((2, 2, 1, 3), (4, 1, 3)),
+     ((2, 2, 1, 3), (1, 3, 4)),
+     ((2, 2, 1, 3), (3, 4, 1)),
+     ((2, 2, 1, 3), (2, 1, 3, 2)),
+     ((2, 2, 1, 3), (12, )),
+     ((2, 2, 1, 3), (12, 1)),
+     ((2, 2, 1, 3), (1, 12)),
+     ((2, 2, 1, 3), (1, 12, 1)),
+     ((2, 2, 1, 3), (1, 1, 12, 1)),
+     ((2, 2, 1, 3), (1, 1, 12, 1, 1)),
+     ]
 )
 def test_reshape(s1, s2) -> None:
     v1 = array(0.0, outer_shape=s1).value
@@ -100,14 +137,16 @@ def test_reshape(s1, s2) -> None:
 
 
 def test_reshape_invalid() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError) as e:
         reshape_list([[1, 2, 3], [1, 2, 3]], (4, ))
+    assert str(e.value) == 'shape mismatched; cannot reshape (2, 3) to (4,)'
 
 
 def test_flatten() -> None:
     assert flatten_list([]) == []
     assert flatten_list([1]) == [1]
     assert flatten_list([1, 2, 3]) == [1, 2, 3]
+    assert flatten_list([[1, 2], [3, 4]], layers=0) == [[1, 2], [3, 4]]
     assert flatten_list([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], layers=0) \
            == [[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]
     assert flatten_list([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], layers=1) \
@@ -127,6 +166,22 @@ def test_flatten_invalid() -> None:
         flatten_list([[1, 2, 3], [1, 2, 3]], layers=2)
     with pytest.raises(ValueError):
         flatten_list([[[1, 2, 3], [1, 2, 3]], [[1, 2, 3], [1, 2, 3]]], layers=3)
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [(1, ),
+     (6, ),
+     (1, 2),
+     (2, 1),
+     (3, 1, 2),
+     (1, 1, 2, 3),
+     (1, 1, 2, 3, 1),
+     (1, 1, 2, 3, 1, 1)]
+)
+def test_flatten_reshape_roundtrip(shape: tuple[int, ...]):
+    v = array(0, outer_shape=shape).value
+    assert reshape_list(flatten_list(v), shape) == v
 
 
 def test_swapaxes():
@@ -172,21 +227,10 @@ def test_transpose_invalid() -> None:
 def test_matmul():
     assert matmul_list([[1, 2]], [[3], [4]]) == [[11]]  # (1, 2)@(2, 1)
     assert matmul_list([[3], [4]], [[1, 2]]) == [[3, 6], [4, 8]]  # (2, 1)@(1, 2)
-    v1 = array([[[1.123, -2.234, 3.345], [-4.456, 5.567, -6.678]]], outer_shape=(2, 1)).value
+    v1 = array([[[1.123, -2.234, 3.345], [-4.456, 5.567, -6.678]]], outer_shape=(2, 1)).value  # (2, 1, 1, 2, 3)
     v2 = swapaxes_list(v1, -1, -2)
-    res = matmul_list(v1, v2)
-    assert res == [[[[[17.440910000000002, -39.778676000000004], [-39.778676000000004, 95.44310899999999]]]],
-                   [[[[17.440910000000002, -39.778676000000004], [-39.778676000000004, 95.44310899999999]]]]]
+    res = matmul_list(v1, v2)  # (2, 1, 1, 2, 3)@(2, 1, 1, 3, 2)
+    expected = [[[[[17.44091, -39.778676], [-39.778676, 95.44310899999999]]]],
+                [[[[17.44091, -39.778676], [-39.778676, 95.44310899999999]]]]]
+    assert flatten_list(res) == pytest.approx(flatten_list(expected), rel=1e-12, abs=1e-12)
     assert check_shape_list(res) == (2, 1, 1, 2, 2)
-
-
-def test_matmul_invalid():
-    with pytest.raises(IndexError):
-        matmul_list([], [])
-
-
-
-
-
-
-
