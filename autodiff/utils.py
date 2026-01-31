@@ -65,13 +65,29 @@ def reshape_list(v: list, shape: tuple[int, ...]) -> list:
     if math.prod(old_shape) != math.prod(shape):
         raise ValueError(f'shape mismatched; cannot reshape {old_shape} to {shape}')
 
-    same_subshape_len = next((i for i, (x, y) in enumerate(zip(reversed(old_shape), reversed(shape))) if x != y), 0)
+    same_subshape_len = 0
+    for d1, d2 in zip(reversed(old_shape), reversed(shape)):
+        if d1 != d2: break
+        same_subshape_len += 1
 
     v = flatten_list(v, max(len(old_shape) - same_subshape_len - 1, 0))  # ex:(2,3,4,5,6)->(3,8,5,6) flatten to (24,5,6)
-    for s in reversed(shape[same_subshape_len:]):
+    if same_subshape_len == len(old_shape):
+        v = [v]
+        #  v is the vector that stores the building blocks we later collect from
+        #  We would first flatten v down to the longest common shape.
+        #  For example: (4, 3)->(2, 2, 3), longest common shape is (3, ), and for
+        #  (2, 3)->(3, 2) there is no common shape.
+        #  After flattening to the right shape, we would look at each dimension s in the reversed
+        #  new shape and collect as many elements as needed into s groups.
+        #  For example : (3, 2)->(2, 3) we first flatten down to 1D(6, ) and from that every 3 numbers
+        #  we put them into [...], and the next layer every 2 [...] we put them into [...]
+        #  However, for (3, 2)->(1, 3, 2) the building blocks should be (3, 2) vecs, if we don't
+        #  put the (3, 2) in a [...] beforehand we would be collecting from a bunch of (2, )s
+
+    for s in reversed(shape[:len(shape)-same_subshape_len]):
         v = [[v[i+j] for j in range(s)] for i in range(0, len(v), s)]
 
-    return sum(v, [])  # remove the extra layer
+    return v[0]  # remove the extra layer, we don't need to
 
 
 def flatten_list(v: list, layers: int = -1) -> list[Number]:
@@ -80,7 +96,7 @@ def flatten_list(v: list, layers: int = -1) -> list[Number]:
     Does not validate homogeneity.
     """
     shape = check_shape_list(v)
-    if len(shape) == 1 and layers == -1:  # v already is 1D
+    if len(shape) == 1 and (layers == 0 or layers == -1):  # v already is 1D
         return v
 
     if len(shape)-1 < abs(layers):
