@@ -13,7 +13,7 @@ class tensor:
     SAVE_TO_MAP = False
 
     def __init__(self, value: Number | Any, op_name: str = "   ", requires_grad: bool = True, is_leaf: bool = True):
-        self.arr = array(value)
+        self.arr: array = array(value)
         self.shape = self.arr.shape
         self.op_name = op_name
         self.requires_grad = requires_grad
