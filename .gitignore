@@ -3,3 +3,6 @@ venv/
 .coverage
 .coveragerc
 __pycache__
+.pytest_cache
+autodiff.egg-info
+htmlcov
