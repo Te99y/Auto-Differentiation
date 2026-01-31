@@ -205,7 +205,7 @@ def matmul(a: TensorLike, b: TensorLike) -> tensor:
     ----------
     a : int | float | list | array | tensor
             The first value to perform matmul.
-    a : int | float | list | array | tensor
+    b : int | float | list | array | tensor
             The second value to perform matmul.
 
     Returns
