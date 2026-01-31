@@ -60,6 +60,28 @@ def binary_elementwise_list(v1: list, v2: list, op: Callable[[Number, Number], N
     return [binary_elementwise_list(v1, v2_i, op) for v2_i in v2]
 
 
+def flatten_list(v: list, layers: int = -1) -> list[Number]:
+    """
+    Flatten an nd-list into a 1D list.
+    Does not validate homogeneity.
+    """
+    shape = check_shape_list(v)
+    if len(shape) == 1 and (layers == 0 or layers == -1):  # v already is 1D
+        return v
+
+    if len(shape) <= abs(layers):
+        raise ValueError('depth out of bound; depth must be less then the length of the shape')
+
+    res: list[Number] = []
+    for idx in itertools.product(*(range(s) for s in shape[:layers])):
+        src = v
+        for i in idx:
+            src = src[i]
+        # src is a 1D row/list at the last axis
+        res.extend(src)
+    return res
+
+
 def reshape_list(v: list, shape: tuple[int, ...]) -> list:
     old_shape = check_shape_list(v)
     if math.prod(old_shape) != math.prod(shape):
@@ -88,28 +110,6 @@ def reshape_list(v: list, shape: tuple[int, ...]) -> list:
         v = [[v[i+j] for j in range(s)] for i in range(0, len(v), s)]
 
     return v[0]  # remove the extra layer, we don't need to
-
-
-def flatten_list(v: list, layers: int = -1) -> list[Number]:
-    """
-    Flatten an nd-list into a 1D list.
-    Does not validate homogeneity.
-    """
-    shape = check_shape_list(v)
-    if len(shape) == 1 and (layers == 0 or layers == -1):  # v already is 1D
-        return v
-
-    if len(shape)-1 < abs(layers):
-        raise ValueError('depth out of bound; depth must be less then the length of the shape')
-
-    res: list[Number] = []
-    for idx in itertools.product(*(range(s) for s in shape[:layers])):
-        src = v
-        for i in idx:
-            src = src[i]
-        # src is a 1D row/list at the last axis
-        res.extend(src)
-    return res
 
 
 def swapaxes_list(v: list, axis1: int, axis2: int) -> list:
