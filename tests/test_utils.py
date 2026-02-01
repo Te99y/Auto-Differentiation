@@ -2,7 +2,8 @@ import pytest
 import operator
 import math
 
-from autodiff.array import array
+from utils import nested_map
+from autodiff import array
 from autodiff.utils import (
     sign,
     depth,
@@ -44,7 +45,7 @@ def test_check_shape() -> None:
 
 
 @pytest.mark.parametrize("shape", [(1, ), (2, 3), (4, 2, 1, 1, 3), (2, 3, 1, 2)])
-def test_check_shape_nested(shape) -> None:
+def test_check_shape_nested(shape: tuple[int, ...]) -> None:
     assert check_shape_list(array([1, 2], outer_shape=shape).value) == shape + (2, )
 
 
@@ -65,13 +66,6 @@ def test_broadcast_invalid() -> None:
 
 def test_broadcast_commutes() -> None:
     assert broadcast((2, 3, 1), (1, 3, 4)) == broadcast((1, 3, 4), (2, 3, 1))
-
-
-def nested_map(fn, v1, v2=None) -> list:
-    old_shape = check_shape_list(v1)
-    if v2 is None:
-        return reshape_list(list(map(fn, flatten_list(v1))), old_shape)
-    return reshape_list(list(map(fn, flatten_list(v1), flatten_list(v2))), old_shape)
 
 
 def test_unary_elementwise() -> None:
