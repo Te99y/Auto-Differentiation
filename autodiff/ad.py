@@ -62,10 +62,11 @@ def jvp(
         If arguments are inconsistent with push_forward.
     """
     if push_forward:
+        if directions is not None:
+            raise ValueError("directions must be None when push_forward=True")
+    else:
         if directions is None:
             raise ValueError("directions must be provided when push_forward=False")
-        else:
-            raise ValueError("directions must be None when push_forward=True")
 
     visited: set[tensor] = set()
     order: list[tensor] = []
