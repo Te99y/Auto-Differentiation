@@ -1,7 +1,8 @@
 from __future__ import annotations
+
 import copy
-import math
 import itertools
+import math
 import operator
 from typing import Callable, Any
 

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from typing import overload, Callable, Mapping, Literal
-from .tensor import tensor
+
 from .array import array
+from .tensor import tensor
 
 JVPFn = Callable[[Mapping[tensor, array]], array]
 VJPFn = Callable[[array | None], dict[tensor, array]]

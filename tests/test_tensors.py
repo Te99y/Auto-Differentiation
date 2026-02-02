@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import math
+
 import pytest
-from tests.utils import scalar, nested_map, assert_close
+
 from autodiff import array, tensor, jvp, vjp
+from tests.utils import scalar, nested_map, assert_close
 
 
 # -------------------------

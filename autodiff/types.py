@@ -1,5 +1,5 @@
-# autodiff/types.py
 from __future__ import annotations
+
 from typing import TYPE_CHECKING, TypeAlias
 
 Number: TypeAlias = int | float

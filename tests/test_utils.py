@@ -1,8 +1,8 @@
-import pytest
-import operator
 import math
+import operator
 
-from tests.utils import nested_map
+import pytest
+
 from autodiff import array
 from autodiff.utils import (
     sign,
@@ -17,6 +17,7 @@ from autodiff.utils import (
     transpose_list,
     matmul_list
 )
+from tests.utils import nested_map
 
 
 @pytest.mark.parametrize("v, res", [(-1e2, -1.0), (-3e-4, -1.0), (0.0, 0.0), (2e-2, 1.0)])
@@ -82,7 +83,6 @@ def test_unary_elementwise() -> None:
 def test_binary_elementwise() -> None:
     v1 = array([2.1234, 4.3456, -5.4567], outer_shape=(2, 1, 4)).value
     v2 = array([-12.6789, 23.789, 45.9012], outer_shape=(2, 1, 4)).value
-    v_zip = list(zip(flatten_list(v1), flatten_list(v2)))
     assert binary_elementwise_list(v1, v2, operator.add) == nested_map(operator.add, v1, v2)
     assert binary_elementwise_list(v1, v2, operator.sub) == nested_map(operator.sub, v1, v2)
     assert binary_elementwise_list(v1, v2, operator.mul) == nested_map(operator.mul, v1, v2)

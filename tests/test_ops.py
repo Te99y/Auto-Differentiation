@@ -5,7 +5,7 @@ import math
 import numpy as np
 import pytest
 
-from autodiff import array, tensor, add, sub, mul, div, neg, abs_, exp, log, sin, cos, vjp
+from autodiff import tensor, add, sub, mul, div, neg, abs_, exp, log, sin, cos, vjp
 from tests.utils import scalar, assert_close
 
 

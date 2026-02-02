@@ -3,8 +3,8 @@ from __future__ import annotations
 import operator
 from typing import Any
 
-from .types import Number
 from .array import array
+from .types import Number
 from .utils import binary_elementwise_list
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from .types import TensorLike
 from .tensor import tensor
+from .types import TensorLike
 from .utils import sign
 
 

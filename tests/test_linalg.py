@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from autodiff import array, tensor, flatten, reshape, transpose, swapaxes, matmul, vjp
 from tests.utils import assert_close

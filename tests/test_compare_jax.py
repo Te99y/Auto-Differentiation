@@ -5,7 +5,7 @@ import pytest
 jax = pytest.importorskip("jax")
 import jax.numpy as jnp
 
-from autodiff import tensor, array, vjp, jvp
+from autodiff import array, vjp, jvp
 from tests.utils import scalar
 
 
