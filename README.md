@@ -1,5 +1,5 @@
 # Auto Differentiation
-[![CI](https://github.com/Te99y/Auto-Differentiation/actions/workflows/ci.yml/badge.svg)](https://github.com/<YOUR_USERNAME>/<YOUR_REPO>/actions/workflows/ci.yml)
+[![CI](https://github.com/Te99y/Auto-Differentiation/actions/workflows/ci.yml/badge.svg)](https://github.com/Te99y/Auto-Differentiation/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
