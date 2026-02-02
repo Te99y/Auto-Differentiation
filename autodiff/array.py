@@ -50,19 +50,14 @@ class array:
         """
         outer_shape = tuple(outer_shape)
 
-        # unwrap tensor-like without importing tensor
-        if hasattr(init_value, "arr"):  # tensor-like
-            init_value = init_value.arr
-
         if isinstance(init_value, array):
             self.shape = outer_shape + init_value.shape
             self.value = deepcopy(init_value.value)
             if outer_shape:
                 for s in reversed(outer_shape):
                     self.value = [deepcopy(self.value) for _ in range(s)]
-            return
 
-        if isinstance(init_value, list):
+        elif isinstance(init_value, list):
             queue = init_value
             inner_shape = (len(queue),)
             while isinstance(queue[0], list):
@@ -80,9 +75,8 @@ class array:
                 for s in reversed(outer_shape):
                     self.value = [deepcopy(self.value) for _ in range(s)]
             self.shape = outer_shape + inner_shape
-            return
 
-        if isinstance(init_value, (int, float)):
+        elif isinstance(init_value, (int, float)):
             if outer_shape:
                 self.shape = outer_shape
                 v: Any = float(init_value)
@@ -92,9 +86,11 @@ class array:
             else:
                 self.shape = (1,)
                 self.value = [float(init_value)]
-            return
-
-        raise ValueError(f'Unsupported init type: {type(init_value)}')
+        # unwrap tensor-like without importing tensor
+        elif hasattr(init_value, "arr"):  # tensor-like
+            init_value = init_value.arr
+        else:
+            raise ValueError(f'Unsupported init type: {type(init_value)}')
 
     def update_shape(self) -> tuple[int, ...]:
         """
