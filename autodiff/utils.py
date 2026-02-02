@@ -115,7 +115,8 @@ def reshape_list(v: list, shape: tuple[int, ...]) -> list:
 def swapaxes_list(v: list, axis1: int, axis2: int) -> list:
     shape = check_shape_list(v)
     dep = depth(v)
-    if abs(axis1) >= dep or abs(axis2) >= dep:
+    # Valid axes: [-dep, dep-1]
+    if axis1 < -dep or axis1 >= dep or axis2 < -dep or axis2 >= dep:
         raise ValueError(f'Axis out of bounds: {axis1}, {axis2} for depth {dep}')
 
     if axis1 == axis2:
