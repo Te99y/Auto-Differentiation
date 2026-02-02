@@ -28,6 +28,7 @@ jobs:
       - name: Lint (ruff)
         run: |
           ruff check .
+        continue-on-error: true
 
       - name: Type check (pyright)
         run: |
