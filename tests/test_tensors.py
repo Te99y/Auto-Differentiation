@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import math
 import pytest
-import autodiff
-from utils import nested_map, assert_close, scalar
+from tests.utils import scalar, nested_map, assert_close
 from autodiff import array, tensor, jvp, vjp
 
 
@@ -22,11 +21,11 @@ def test_forward_add_scalar() -> None:
 # Shape semantics
 # -------------------------
 
-def test_array_flatten_shape() -> None:
-    a = array([[1.0, 2.0], [3.0, 4.0]])
+def test_tensor_flatten_shape() -> None:
+    a = tensor([[1.0, 2.0], [3.0, 4.0]])
     f = a.flatten()
     assert f.shape == (4,)
-    assert f.value == [1.0, 2.0, 3.0, 4.0]
+    assert f.arr.value == [1.0, 2.0, 3.0, 4.0]
 
 
 # -------------------------
@@ -34,8 +33,8 @@ def test_array_flatten_shape() -> None:
 # -------------------------
 
 def test_matmul_shape_error() -> None:
-    a = array([[1.0, 2.0]])          # shape (1,2)
-    b = array([[1.0, 2.0]])          # shape (1,2) inner dims mismatch for @
+    a = tensor([[1.0, 2.0]])          # shape (1,2)
+    b = tensor([[1.0, 2.0]])          # shape (1,2) inner dims mismatch for @
     with pytest.raises(ValueError):
         _ = a @ b
 
@@ -52,13 +51,45 @@ def test_vjp_scalar_square() -> None:
     assert grads[x].value == [6.0]
 
 
-def test_jvp_scalar_square() -> None:
-    x = scalar(3.0)
+@pytest.mark.parametrize("s", [3.0, [3.0], [1.0, 2.0, 3.0], [[1.0, 2.0, 3.0], [-1.0, -2.0, -3.0]]])
+def test_jvp_scalar_unary_elementwise(s) -> None:
+    x = tensor(s)
+
+    # y = x*x, direction v = 1 => JVP = 2x * 1
+    tan = jvp(x * x, inputs=None, directions={x: array(1.0)})
+    assert tan.value == nested_map(lambda v: v * 2, s)
+
+    # y = e^x, direction v = 1 => JVP = e^x * 1 = 6
+    tan = jvp(x.exp(), inputs=None, directions={x: array(1.0)})
+    assert tan.value == nested_map(lambda v: math.exp(v), s)
+
+
+@pytest.mark.parametrize(
+    "s1, s2",
+    [(3.0, 4.1),
+     ([3.0], [4.1]),
+     ([1.0, 2.0, 3.0], [4.1, 5.2, 6.3]),
+     ([[1.0, 2.0, 3.0], [-1.0, -2.0, -3.0]], [[4.1, 5.2, 6.3], [-4.1, -5.2, -6.3]])]
+)
+def test_jvp_scalar_binary_elementwise(s1, s2) -> None:
+    x1, x2 = tensor(s1), tensor(s2)
+
+    # y = x1 * x2, direction v = 1 => JVP = x1 * 1 + x2 * 1
+    tan = jvp(x1 * x2, inputs=None, directions={x1: array(1.0), x2: array(1.0)})
+    assert tan.value == nested_map(lambda v1, v2: v1+v2, s1, s2)
+
+    # y = x1 / x2, direction v = 1 => JVP = 1/x2 * 1 + -x1*x2^-2 * 1
+    tan = jvp(x1 / x2, inputs=None, directions={x1: array(1.0), x2: array(1.0)})
+    assert_close(tan.value, nested_map(lambda v1, v2: 1.0/v2 - v1/(v2*v2), s1, s2))
+
+
+def test_jvp_1d_vector() -> None:
+    x = tensor([1.0, 2.0, 3.0])
     y = x * x
 
     # direction v = 1 => JVP = 2x * 1 = 6
-    tan = jvp(y, inputs={x: x.arr}, directions={x: array(1.0)}, push_forward=False)
-    assert tan.value == [6.0]
+    tan = jvp(y, inputs={x: x.arr}, directions={x: array(1.0)})
+    assert tan.value == [2.0, 4.0, 6.0]
 
 
 def test_vjp_pullback_closure() -> None:
