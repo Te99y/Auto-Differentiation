@@ -1,6 +1,4 @@
-import AutoDiff as ad
 import numpy as np
-import jax
 import jax.numpy as jnp
 from graphviz import Digraph
 dot = Digraph(comment='Function graph')

@@ -5,7 +5,54 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "autodiff"
 version = "0.1.0"
+description = "Educational automatic differentiation (JVP/VJP) with a pure-Python list-backed ND array."
+readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+  {name = "Te99y", email = "f74106246@gs.ncku.edu.tw"},
+]
+keywords = ["autodiff", "automatic differentiation", "jvp", "vjp", "reverse-mode", "forward-mode"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: MIT License",
+  "Intended Audience :: Education",
+  "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0",
+  "numpy>=1.24",
+  "ruff>=0.3.0",
+  "pyright>=1.1.350",
+]
+jax = [
+  "jax[cpu]>=0.4.0",
+]
 
 [tool.setuptools]
 packages = ["autodiff"]
+
+# --- Tooling configs ---
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]  # let line-length be handled by formatter/editor
+
+[tool.pyright]
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
+reportMissingTypeStubs = false

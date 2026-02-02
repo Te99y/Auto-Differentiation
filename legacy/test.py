@@ -2,8 +2,7 @@ import math
 import operator
 import unittest
 import numpy as np
-import numpy.testing as npt
-import AutoDiff as ad
+from legacy import AutoDiff as ad
 import coverage
 import jax
 import jax.numpy as jnp
