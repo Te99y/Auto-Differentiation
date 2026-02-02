@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A small educational automatic differentiation engine supporting forward‑mode (JVP) and reverse‑mode (VJP) with a pure‑Python, list‑backed N‑dimensional array.
+A zero runtime dependency automatic differentiation engine supporting forward‑mode (JVP) and reverse‑mode (VJP) with a pure‑Python, list‑backed N‑dimensional array.
 
 ---
 
@@ -14,7 +14,7 @@ A small educational automatic differentiation engine supporting forward‑mode (
 - Reverse‑mode automatic differentiation via Vector–Jacobian Product (VJP)  
 - Broadcasting and elementwise operations  
 - Linear algebra support: `@` (matrix multiplication), `transpose`, `swapaxes`, `flatten`, `reshape`  
-- Pure Python implementation (no NumPy required at runtime)  
+- Does not rely on NumPy/JAX/PyTorch in runtime
 - Tested against:
   - finite‑difference gradients  
   - NumPy reference implementations  
