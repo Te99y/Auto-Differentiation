@@ -6,9 +6,12 @@ def nested_map(fn, v1, v2=None) -> list:
     """
     Extension of the map() to nested list
     """
+    v1 = [v1] if isinstance(v1, float) or isinstance(v1, int) else v1
     old_shape = check_shape_list(v1)
     if v2 is None:
         return reshape_list(list(map(fn, flatten_list(v1))), old_shape)
+
+    v2 = [v2] if isinstance(v2, float) or isinstance(v2, int) else v2
     return reshape_list(list(map(fn, flatten_list(v1), flatten_list(v2))), old_shape)
 
 

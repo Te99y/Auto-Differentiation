@@ -2,7 +2,7 @@ import pytest
 import operator
 import math
 
-from utils import nested_map
+from tests.utils import nested_map
 from autodiff import array
 from autodiff.utils import (
     sign,
