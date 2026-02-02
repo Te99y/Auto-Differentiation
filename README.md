@@ -192,6 +192,10 @@ README.md
 ## ️ Acknowledgements
 
 Inspired by:
-- JAX  
-- PyTorch Autograd  
-- CS autodiff lectures  
+- Fang, Yu‑Hsueh; Lin, He‑Zhe; Liu, Jie‑Jyun; and Lin, Chih‑Jen.  
+  *[A Step‑by‑step Introduction to the Implementation of Automatic Differentiation.](https://www.csie.ntu.edu.tw/~cjlin/papers/autodiff/autodiff.pdf)*  
+  National Taiwan University; Mohamed bin Zayed University of Artificial Intelligence.  
+ 
+- Hare, Jonathon.  
+  *[An Introduction to Automatic Differentiation.](https://comp6248.ecs.soton.ac.uk/handouts/autograd-handouts.pdf)*  
+  Vision, Learning and Control, University of Southampton.
